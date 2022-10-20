@@ -1,4 +1,4 @@
-name: examples
+name: demo-ctr
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -19,7 +19,7 @@ on:
     - cron: "0 0 */1 * *"
 
 jobs:
-  run-all-examples:
+  run-all-examples-with-containerd:
 
     runs-on: ubuntu-20.04
 

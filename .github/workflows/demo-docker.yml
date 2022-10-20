@@ -1,0 +1,133 @@
+name: demo-docker
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+  push:
+    branches: [add-docker-demos]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 0 */1 * *"
+
+jobs:
+  run-partial-example-with-docker:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - uses: actions/setup-go@v3
+      with:
+        go-version: '>=1.17.0'
+
+    - name: Setup build moby enviornment
+      run: |
+        sudo ACCEPT_EULA=Y apt-get -y update
+        sudo ACCEPT_EULA=Y apt-get -y upgrade
+        sudo apt-get -y install libbtrfs-dev
+        # sudo apt-get -y install libdevmapper-dev libbtrfs-dev
+        # echo "GOPATH=$(dirname $(which go))" >> $GITHUB_ENV
+        echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+        echo "GOROOT=$(go env GOROOT)" >> $GITHUB_ENV
+        echo "$(dirname $(which go))" >> $GITHUB_PATH
+
+    # Used for setup docker official release engine with support wasm feature
+    # Not docker-desktop here because
+    # it's working in nested virtualization enable or physical machine only
+    #
+    # - name: setup-docker
+    #   uses: docker-practice/actions-setup-docker@1.0.11
+    #   with:
+    #     docker_version: 20.10.20
+    #     docker_daemon_json: |
+    #       {
+    #         "features": {
+    #           "containerd-snapshotter": true
+    #         }
+    #       }
+
+    - name: Checkout moby to support wasmedge runtime
+      uses: actions/checkout@v3
+      with:
+        repository: rumpl/moby
+        path: moby
+
+    - name: Build dockerd from Moby and restart daenmon
+      working-directory: moby
+      run: |
+        git fetch
+        git checkout wasmedge
+        cp vendor.mod go.mod; cp vendor.sum go.sum
+        ./hack/make.sh binary
+        sudo cp bundles/binary-daemon/dockerd /usr/local/bin
+        sudo sed -i 's,/usr/bin,/usr/local/bin,' /usr/lib/systemd/system/docker.service
+        bundles/binary-daemon/dockerd --version
+        sudo -E sh -c 'cat <<\EOF > /etc/docker/daemon.json
+        {
+          "features": {
+            "containerd-snapshotter": true
+          }
+        }
+        EOF'
+        sudo systemctl daemon-reload
+        sudo systemctl restart docker.service
+        docker info
+
+    - name: Check docker plugin
+      working-directory: moby
+      run: |
+        docker compose version
+        docker buildx version
+        mkdir ~/.docker/cli-plugins/
+        curl -SL https://github.com/docker/compose/releases/download/v2.11.2/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
+        chmod +x ~/.docker/cli-plugins/docker-compose
+        docker compose version
+        wget https://github.com/docker/buildx/releases/download/v0.9.1/buildx-v0.9.1.linux-amd64 -O ~/.docker/cli-plugins/docker-buildx
+        chmod +x ~/.docker/cli-plugins/docker-buildx
+        docker buildx version
+
+    - name: Install WasmEdge
+      run: |
+        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s
+
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        path: runwasi
+
+    - name: Build and install conatiner wasmedge shim
+      working-directory: runwasi
+      run: |
+        echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> $GITHUB_ENV
+        rustup default nightly
+        rustup target add wasm32-wasi
+        make build
+        sudo make install
+
+    - name: Run wasmtest
+      run: |
+        docker run --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm rumpl/wasmtest echo 'hello'
+
+    - name: Build the stack and run hyped demo
+      working-directory: runwasi/demo/hyper
+      run: |
+        docker compose up client
+        docker compose up server -d
+        curl http://0.0.0.0:8080/echo -X POST -d "WasmEdge"
+        docker compose down
+
+    - name: Build the stack and run microservice with db demo
+      working-directory: runwasi/demo/microservice_db
+      run: |
+        docker compose up -d
+        curl http://localhost:8080/init
+        curl http://localhost:8080/create_orders -X POST -d @orders.json
+        curl http://localhost:8080/orders
+        curl http://localhost:8080/update_order -X POST -d @update_order.json
+        curl http://localhost:8080/delete_order?id=2
+        docker compose down
