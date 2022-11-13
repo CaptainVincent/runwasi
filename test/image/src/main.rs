@@ -1,4 +1,6 @@
 use std::{env, fs::File, io::prelude::*, process, thread::sleep, time::Duration};
+extern crate wasmedge_wasi_socket;
+use wasmedge_wasi_socket::nslookup;
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -8,7 +10,12 @@ fn main() {
     }
 
     match cmd {
-        "echo" => println!("{}", &args[2..].join(" ")),
+        "echo" => {
+            let _addrs = nslookup("db", "http").unwrap();
+            println!("address {:?}", _addrs);
+
+            println!("{}", &args[2..].join(" "));
+        },
         "sleep" => sleep(Duration::from_secs_f64(args[2].parse::<f64>().unwrap())),
         "exit" => process::exit(args[2].parse::<i32>().unwrap()),
         "write" => {

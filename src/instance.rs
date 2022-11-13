@@ -26,6 +26,7 @@ use wasmedge_sys::{utils, AsyncResult};
 
 use super::error::WasmRuntimeError;
 use super::oci_wasmedge;
+use std::process::Command;
 
 static mut STDIN_FD: Option<RawFd> = None;
 static mut STDOUT_FD: Option<RawFd> = None;
@@ -305,6 +306,15 @@ impl Instance for Wasi {
                         .unwrap(),
                 );
                 drop(job);
+
+                // println!("vincent test");
+                // let output = Command::new("/bin/ls")
+                //                      .arg("/")
+                //                      .output()
+                //                      .expect("failed to execute process");
+                // println!("status: {}", output.status);
+                // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+                // println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
 
                 let _ret = match (&*JOB.read().unwrap()).as_ref().unwrap().get_async() {
                     Ok(_) => {

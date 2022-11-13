@@ -13,3 +13,6 @@
 [submodule "demo/wasinn"]
 	path = demo/wasinn
 	url = https://github.com/second-state/WasmEdge-WASINN-examples.git
+[submodule "test/image/wasmedge_wasi_socket"]
+	path = test/image/wasmedge_wasi_socket
+	url = https://github.com/second-state/wasmedge_wasi_socket.git
