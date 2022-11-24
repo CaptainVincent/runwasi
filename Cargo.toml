@@ -11,22 +11,28 @@ ttrpc = "0.6"
 wasmedge-sys = { version = "0.10.0", optional = true }
 wasmedge-sdk = { version = "0.5.0", optional = true }
 wasmedge-types = { version = "0.3.0", optional = true }
-chrono = "0.4.19"
+wasmtime = { version = "2.0", optional = true }
+wasmtime-wasi = { version = "2.0", optional = true }
+wasi-common = { version = "2.0", optional = true }
+chrono = "0.4"
 anyhow = "1.0"
-cap-std = "0.24.1"
+cap-std = "0.26"
 oci-spec = "0.5"
 thiserror = "1.0"
 serde_json = "1.0"
 libc = "0.2.132"
 lazy_static = "1.4.0"
-nix = "0.23"
+nix = "0.25"
 
 [dev-dependencies]
 tempfile = "3.0"
+libc = "0.2"
+pretty_assertions = "1"
 
 [features]
 wasmedge = ["wasmedge-sys", "wasmedge-sdk", "wasmedge-types"]
 wasi_nn = ["wasmedge-sys/wasi_nn", "wasmedge-sdk/wasi_nn"]
+wasmtime = ["dep:wasmtime", "wasmtime-wasi", "wasi-common"]
 
 [workspace]
 members = ["crates/containerd-shim-wasm"]
@@ -45,6 +51,21 @@ required-features = ["wasmedge"]
 name = "containerd-wasmedged"
 path = "src/bin/containerd-wasmwasid/main.rs"
 required-features = ["wasmedge"]
+
+[[bin]]
+name = "containerd-shim-wasmtime-v1"
+path = "src/bin/containerd-shim-wasmwasi-v1/main.rs"
+required-features = ["wasmtime"]
+
+[[bin]]
+name = "containerd-shim-wasmtimed-v1"
+path = "src/bin/containerd-shim-wasmwasid-v1/main.rs"
+required-features = ["wasmtime"]
+
+[[bin]]
+name = "containerd-wasmtimed"
+path = "src/bin/containerd-wasmwasid/main.rs"
+required-features = ["wasmtime"]
 
 [profile.release]
 panic = "abort"

@@ -84,6 +84,6 @@ jobs:
           echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib" >> $GITHUB_ENV
           rustup default nightly
       - name: Build
-        run: cargo build --features wasmedge --verbose
+        run: cargo build --all --features wasmedge --verbose
       - name: Run tests
-        run: cargo test --features wasmedge --verbose
+        run: cargo test --all --features wasmedge --verbose

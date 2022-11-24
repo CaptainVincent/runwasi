@@ -33,8 +33,8 @@ FEATURES_FLAG = --features $(FEATURES)
 endif
 
 RUNTIME :=
-ifneq ($(RUNTIME),)
-RUNTIME = $(shell echo ${FEATURES} | grep -o "wasmedge")
+ifeq ($(RUNTIME),)
+RUNTIME = $(shell echo ${FEATURES} | grep -o "wasmedge\|wasmtime")
 endif
 
 .PHONY: build

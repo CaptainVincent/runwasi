@@ -7,6 +7,8 @@ use log::info;
 use runwasi::runtime_utils::runtime_check;
 #[cfg(feature = "wasmedge")]
 use runwasi::wasmedge::instance::Wasi as WasiInstance;
+#[cfg(feature = "wasmtime")]
+use runwasi::wasmtime::instance::Wasi as WasiInstance;
 use ttrpc::{self, Server};
 
 fn main() {
