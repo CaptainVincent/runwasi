@@ -35,10 +35,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/git/db \
     export "CC_$(xx-info march | tr '[:lower:]' '[:upper:]' | tr - _)_UNKNOWN_$(xx-info os | tr '[:lower:]' '[:upper:]' | tr - _)_$(xx-info libc | tr '[:lower:]' '[:upper:]' | tr - _)=$(xx-info)-gcc"
     cargo build --release --features wasmedge --target=$(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)
     cp target/$(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)/release/containerd-shim-wasmedge-v1 /containerd-shim-wasmedge-v1
+    cargo build --release --features wasmtime --target=$(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)
+    cp target/$(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)/release/containerd-shim-wasmtime-v1 /containerd-shim-wasmtime-v1
 EOT
 
 FROM scratch AS release
 COPY --link --from=build /containerd-shim-wasmedge-v1 /containerd-shim-wasmedge-v1
 COPY --link --from=build /root/.wasmedge/lib/libwasmedge.so.0.0.1 /libwasmedge.so.0.0.1
+COPY --link --from=build /containerd-shim-wasmtime-v1 /containerd-shim-wasmtime-v1
 
 FROM release
