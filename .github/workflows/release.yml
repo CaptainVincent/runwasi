@@ -10,105 +10,83 @@ on:
       - 'v[0-9]+.[0-9]+.*'
   pull_request:
     branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  REPO_SLUG: "vincent2nd/runwasi"
+
 jobs:
-  build:
-    name: Build on ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: arm64
-          - arch: amd64
-            runner: ubuntu-latest
+  hub:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/cache@v3
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: lowercase the runner OS name
-        shell: bash
-        run: |
-          OS=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-          echo "RUNNER_OS=$OS" >> $GITHUB_ENV
-
-      - name: Setup WasmEdge build env
-        run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --os=${{ matrix.os }} --arch=${{ matrix.warch }}
-          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib" >> $GITHUB_ENV
-
-      - name: Install deps on arm64
-        run: |
-          sudo apt update
-          sudo apt install -y clang llvm
-
-      - name: Install nightly Rust Toolchain
-        uses: dtolnay/rust-toolchain@nightly
+          images: ${{ env.REPO_SLUG }}
+          ### frontend versioning
+          ### on semver tag:
+          # deislabs/runwasi:1.2.3
+          # deislabs/runwasi:1.2
+          # deislabs/runwasi:1
+          # deislabs/runwasi:latest
+          ### on pre-release tag:
+          # deislabs/runwasi:1.1.0-rc.1
+          ### on push default branch (main):
+          # deislabs/runwasi:main
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=raw,value=latest
+            type=ref,event=pr
+          bake-target: meta-helper
+          flavor: |
+            latest=false
+      - name: Login to DockerHub
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: docker/login-action@v2
         with:
-          toolchain: nightly
-
-      - name: Build
-        run: |
-          cargo build --features wasmedge --verbose --release
-
-      - name: package assets
-        run: |
-          mkdir _dist
-          cp target/release/containerd-shim-wasmedge-v1 _dist/containerd-shim-wasmedge-v1
-          cd _dist
-          tar czf containerd-shim-wasmedge-v1-${{ env.RUNNER_OS }}-${{ matrix.arch }}.tar.gz containerd-shim-wasmedge-v1
-      - name: upload binary as GitHub artifact
-        uses: actions/upload-artifact@v3
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      - name: Build and push
+        uses: docker/bake-action@v2
         with:
-          name: containerd-shim-wasmedge-v1-${{ matrix.arch }}
-          path: _dist/containerd-shim-wasmedge-v1-${{ env.RUNNER_OS }}-${{ matrix.arch }}.tar.gz
-
-      - name: Test
-        run: |
-          cargo test --features wasmedge --verbose
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta.outputs.bake-file }}
+          targets: image-cross
+          push: ${{ github.event_name != 'pull_request' }}
 
   release:
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: arm64
-          - arch: amd64
-            runner: ubuntu-latest
+    needs: hub
+    runs-on: ubuntu-latest
     steps:
-      - name: Set RELEASE_VERSION ENV var
-        run: echo "RELEASE_VERSION=${GITHUB_REF:10}" >> $GITHUB_ENV
-      - name: lowercase the runner OS name
-        shell: bash
+      - name: Tar artifacts from Docker Hub
         run: |
-          OS=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-          echo "RUNNER_OS=$OS" >> $GITHUB_ENV
-
-      - uses: actions/download-artifact@v3
-        with:
-          name: containerd-shim-wasmedge-v1-${{ matrix.arch }}
-      - name: Apply version
-        run: mv containerd-shim-wasmedge-v1-${{ env.RUNNER_OS }}-${{ matrix.arch }}.tar.gz containerd-shim-wasmedge-v1-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.arch }}.tar.gz
+          curl -sSf https://raw.githubusercontent.com/CaptainVincent/docker-image-extract/main/docker-image-extract | bash -s -- -p linux/arm64 -o containerd-shim-v1-linux-arm64 -- vincent2nd/runwasi
+          tar czf containerd-shim-v1-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz containerd-shim-v1-linux-arm64
+          curl -sSf https://raw.githubusercontent.com/CaptainVincent/docker-image-extract/main/docker-image-extract | bash -s -- -p linux/amd64 -o containerd-shim-v1-linux-amd64 -- vincent2nd/runwasi
+          tar czf containerd-shim-v1-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz containerd-shim-v1-linux-amd64
       - name: upload binary to GitHub release
-        uses: svenstaro/upload-release-action@2.2.1
+        uses: svenstaro/upload-release-action@2.3.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: containerd-shim-wasmedge-v1-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.arch }}.tar.gz
-          asset_name: containerd-shim-wasmedge-v1-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.arch }}.tar.gz
+          file: ./*.gz
+          file_glob: true
           overwrite: true
           prerelease: true
           tag: ${{ github.ref }}
           body: |
-            Release of containerd-shim-wasmedge-v1:${{ env.RELEASE_VERSION }} for amd64 and arm64
+            Release of containerd-shim-wasmedge-v1 and containerd-shim-wasmtime-v1:${{ env.RELEASE_VERSION }} for amd64 and arm64
