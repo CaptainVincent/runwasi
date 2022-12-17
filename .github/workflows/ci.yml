@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches: [test-ci]
     tags:
       - 'v*'
   pull_request:
