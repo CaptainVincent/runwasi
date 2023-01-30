@@ -12,7 +12,7 @@ on:
         required: true
         default: 'info'
   push:
-    branches: [main]
+    branches: [test-ci]
   pull_request:
     branches: [main]
   schedule:
