@@ -4,14 +4,11 @@ use containerd_shim_wasm::sandbox::EngineGetter;
 use containerd_shim_wasm::sandbox::{Local, ManagerService};
 use containerd_shim_wasm::services::sandbox_ttrpc::{create_manager, Manager};
 use log::info;
-use runwasi::runtime_utils::runtime_check;
-#[cfg(feature = "wasmedge")]
 use runwasi::wasmedge::instance::Wasi as WasiInstance;
 use ttrpc::{self, Server};
 
 fn main() {
     info!("starting up!");
-    runtime_check();
     let s: ManagerService<_, Local<WasiInstance, _>> =
         ManagerService::new(WasiInstance::new_engine().unwrap());
     let s = Arc::new(Box::new(s) as Box<dyn Manager + Send + Sync>);

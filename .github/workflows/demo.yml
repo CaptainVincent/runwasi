@@ -52,8 +52,8 @@ jobs:
       run: |
         rustup default nightly
         rustup target add wasm32-wasi
-        make build FEATURES=wasmedge
-        sudo make install RUNTIME=wasmedge
+        make build
+        sudo make install
 
     - name: Build all test and demo OCI images
       run: |
@@ -115,8 +115,8 @@ jobs:
 
     - name: Build and install conatiner wasmedge shim with support wasi-nn plugin
       run: |
-        make build FEATURES=wasmedge,wasi_nn
-        sudo make install RUNTIME=wasmedge
+        make build FEATURES=wasi_nn
+        sudo make install
 
     - name: Add WASMEDGE_PLUGIN_PATH into service containerd
       shell: 'script -q -e -c "bash {0}"'

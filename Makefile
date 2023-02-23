@@ -22,11 +22,6 @@ ifneq ($(FEATURES),)
 FEATURES_FLAG = --features $(FEATURES)
 endif
 
-RUNTIME :=
-ifneq ($(RUNTIME),)
-RUNTIME = $(shell echo ${FEATURES} | grep -o "wasmedge")
-endif
-
 .PHONY: build
 build:
 	cargo build $(RELEASE_FLAG) $(FEATURES_FLAG)
@@ -36,9 +31,9 @@ clean:
 
 .PHONY: install
 install:
-	$(INSTALL) target/$(TARGET)/containerd-shim-$(RUNTIME)-v1 $(PREFIX)/bin
-	$(INSTALL) target/$(TARGET)/containerd-shim-$(RUNTIME)d-v1 $(PREFIX)/bin
-	$(INSTALL) target/$(TARGET)/containerd-$(RUNTIME)d $(PREFIX)/bin
+	$(INSTALL) target/$(TARGET)/containerd-shim-wasmedge-v1 $(PREFIX)/bin
+	$(INSTALL) target/$(TARGET)/containerd-shim-wasmedged-v1 $(PREFIX)/bin
+	$(INSTALL) target/$(TARGET)/containerd-wasmedged $(PREFIX)/bin
 
 .PHONY: target/wasm32-wasi/$(TARGET)/wasi-demo-app.wasm
 target/wasm32-wasi/$(TARGET)/wasi-demo-app.wasm:
