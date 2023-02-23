@@ -10,8 +10,17 @@ target "image" {
     output = ["type=image"]
 }
 
-target "image-cross" {
+target "image-cross-legacy" {
     inherits = ["image"]
+    platforms = [
+        "linux/amd64",
+        "linux/arm64"
+    ]
+}
+
+target "image-cross-installable" {
+    inherits = ["image"]
+    dockerfile = "DockerfileInstallable"
     platforms = [
         "linux/amd64",
         "linux/arm64"
