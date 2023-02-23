@@ -55,7 +55,7 @@ jobs:
 
       - name: Build
         run: |
-          cargo build --features wasmedge --verbose --release
+          cargo build --verbose --release
 
       - name: package assets
         run: |
@@ -71,7 +71,7 @@ jobs:
 
       - name: Test
         run: |
-          cargo test --features wasmedge --verbose
+          cargo test --verbose
 
   release:
     permissions:

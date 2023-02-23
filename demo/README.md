@@ -459,8 +459,8 @@ Environment="WASMEDGE_PLUGIN_PATH=<Your Plugin Install Path>"
 
 - Build and install wasmedge shim with support wasi-nn plugin
 ```terminal
-$ make build FEATURES=wasmedge,wasi_nn
-$ sudo make install RUNTIME=wasmedge
+$ make build FEATURES=wasi_nn
+$ sudo make install
 ```
 
 - Download test image

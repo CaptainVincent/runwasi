@@ -103,7 +103,7 @@ Shared mode requires precise control over real threads and as such should not be
 
 This is a containerd shim which runs wasm workloads in [WasmEdge](https://github.com/WasmEdge/WasmEdge).
 You can use it with containerd's `ctr` by specifying `--runtime=io.containerd.wasmedge.v1` when creating the container.
-And make sure the shim binary must be in $PATH (that is the $PATH that containerd sees). Usually you just run `sudo make install RUNTIME=wasmedge` after `make build FEATURES=wasmedge`.
+And make sure the shim binary must be in $PATH (that is the $PATH that containerd sees). Usually you just run `sudo make install` after `make build`.
 
 This shim runs one per pod.
 
@@ -157,10 +157,10 @@ test instance::wasitest::test_wasi ... ok
 - **Build and install shim components**
 
 ```terminal
-$ make build FEATURES=wasmedge 
-$ sudo make install RUNTIME=wasmedge
+$ make build FEATURES=wasi_nn 
+$ sudo make install
 ```
-> FEATURES and RUNTIME here support wasmedge only (wasi_nn is optional in FEATURES)
+> FEATURES is optional
 
 - **Demo**
 
