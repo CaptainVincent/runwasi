@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+
+ARG RUST_VERSION=1.63
+ARG XX_VERSION=1.1.0
+
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
+
+FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION} AS base
+COPY --from=xx / /
+RUN apt-get update -y && apt-get install --no-install-recommends -y clang
+# Nightly is needed because there are nested workspaces
+RUN rustup default nightly
+
+FROM base AS build
+SHELL ["/bin/bash", "-c"]
+ARG BUILD_TAGS TARGETPLATFORM
+ENV WASMEDGE_INCLUDE_DIR=/root/.wasmedge/include
+ENV WASMEDGE_LIB_DIR=/root/.wasmedge/lib
+ENV LD_LIBRARY_PATH=/root/.wasmedge/lib
+RUN xx-apt-get install -y gcc g++ libc++6-dev zlib1g
+RUN rustup target add $(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)
+RUN <<EOT
+    set -ex
+    os=$(xx-info os)
+    march=$(xx-info march)
+    mkdir -p /dynlib
+    if [ $march = "x86_64" ]; then
+        pytorch_version=1.8.2
+        curl -s -L -O --remote-name-all https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-cxx11-abi-shared-with-deps-${pytorch_version}%2Bcpu.zip
+        unzip -q "libtorch-cxx11-abi-shared-with-deps-${pytorch_version}%2Bcpu.zip"
+        mv ./libtorch/lib/libtorch.so /dynlib
+        mv ./libtorch/lib/libc10.so /dynlib
+        mv ./libtorch/lib/libtorch_cpu.so /dynlib
+        mv ./libtorch/lib/libgomp-75eea7e8.so.1 /dynlib
+        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.11.2 --platform=${os^} --machine=$march --plugins wasi_nn-pytorch --dist=ubuntu20.04
+    else
+        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.11.2 --platform=${os^} --machine=$march
+    fi
+EOT
+
+COPY . .
+WORKDIR /
+
+RUN --mount=type=cache,target=/usr/local/cargo/git/db \
+    --mount=type=cache,target=/usr/local/cargo/registry/cache \
+    --mount=type=cache,target=/usr/local/cargo/registry/index <<EOT
+    set -e
+    export "CARGO_NET_GIT_FETCH_WITH_CLI=true"
+    export "CARGO_TARGET_$(xx-info march | tr '[:lower:]' '[:upper:]' | tr - _)_UNKNOWN_$(xx-info os | tr '[:lower:]' '[:upper:]' | tr - _)_$(xx-info libc | tr '[:lower:]' '[:upper:]' | tr - _)_LINKER=$(xx-info)-gcc"
+    export "CC_$(xx-info march | tr '[:lower:]' '[:upper:]' | tr - _)_UNKNOWN_$(xx-info os | tr '[:lower:]' '[:upper:]' | tr - _)_$(xx-info libc | tr '[:lower:]' '[:upper:]' | tr - _)=$(xx-info)-gcc"
+    cargo build --release --features wasi_nn --target=$(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)
+    cp target/$(xx-info march)-unknown-$(xx-info os)-$(xx-info libc)/release/containerd-shim-wasmedge-v1 /containerd-shim-wasmedge-v1
+EOT
+
+FROM scratch AS release
+COPY --link --from=build /containerd-shim-wasmedge-v1 /bin/containerd-shim-wasmedge-v1
+COPY --link --from=build /dynlib/ /lib/
+COPY --link --from=build /root/.wasmedge/lib/* /lib/
+COPY --link --from=build /root/.wasmedge/plugin/* /lib/
+
+FROM release
