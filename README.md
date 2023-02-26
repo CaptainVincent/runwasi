@@ -157,10 +157,9 @@ test instance::wasitest::test_wasi ... ok
 - **Build and install shim components**
 
 ```terminal
-$ make build FEATURES=wasi_nn 
+$ make build
 $ sudo make install
 ```
-> FEATURES is optional
 
 - **Demo**
 

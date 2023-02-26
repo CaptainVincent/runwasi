@@ -8,7 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex};
 use std::{process, thread};
 
 use anyhow::Context;
@@ -17,12 +17,17 @@ use containerd_shim_wasm::sandbox::error::Error;
 use containerd_shim_wasm::sandbox::oci;
 use containerd_shim_wasm::sandbox::{EngineGetter, Instance, InstanceConfig};
 use log::{debug, error};
-use nix::{sys::signal, unistd::Pid};
+use nix::{
+    mount::{mount, MsFlags},
+    sys::signal,
+    unistd::Pid,
+};
 use wasmedge_sdk::{
     config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions},
-    params, Vm,
+    params,
+    plugin::PluginManager,
+    Vm, VmBuilder,
 };
-use wasmedge_sys::{utils, AsyncResult};
 
 use super::oci_utils;
 use crate::error::WasmRuntimeError;
@@ -30,9 +35,6 @@ use crate::error::WasmRuntimeError;
 static mut STDIN_FD: Option<RawFd> = None;
 static mut STDOUT_FD: Option<RawFd> = None;
 static mut STDERR_FD: Option<RawFd> = None;
-lazy_static! {
-    static ref JOB: Arc<RwLock<Option<AsyncResult>>> = Arc::new(RwLock::new(None));
-}
 
 pub struct Wasi {
     exit_code: Arc<(Mutex<Option<(u32, DateTime<Utc>)>>, Condvar)>,
@@ -128,8 +130,8 @@ pub fn prepare_module(
     let args = oci::get_args(&spec);
 
     debug!("setting up wasi");
-    let mut wasi_instance = vm.wasi_module()?;
-    wasi_instance.initialize(
+    let wasi_module = vm.wasi_module_mut().ok_or("Not found wasi module").unwrap();
+    wasi_module.initialize(
         Some(args.iter().map(|s| s as &str).collect()),
         Some(envs.iter().map(|s| s as &str).collect()),
         Some(preopens),
@@ -161,6 +163,46 @@ pub fn prepare_module(
             dup2(stderr.unwrap(), STDERR_FILENO);
         }
     }
+
+    let envs = parse_env(&envs);
+    let plugins_on_host_path = envs.get("WASMEDGE_PLUGIN_HOST_PATH");
+    let plugins_in_container_path: Option<_> = envs.get("WASMEDGE_PLUGIN_PATH");
+    let path: String = match (plugins_on_host_path, plugins_in_container_path) {
+        (Some(_), Some(_)) => {
+            return Err(WasmRuntimeError::Error(Error::Others(format!(
+                "Ambiguous to identify plugins path"
+            ))));
+        }
+        (Some(host_path), None) => {
+            host_path.to_owned()
+        }
+        (None, Some(container_path)) => {
+            format!("{}/{}", rootfs_path, container_path)
+        }
+        (None, None) => {
+            format!("/opt/containerd/lib")
+        }
+    };
+
+    // Shadow host's /opt/containerd/lib/
+    if Path::new(&path).exists() && path != "/opt/containerd/lib" {
+        mount::<str, Path, str, str>(
+            Some(path.as_str()),
+            Path::new("/opt/containerd/lib"),
+            None,
+            MsFlags::MS_BIND,
+            None,
+        )
+        .map_err(|err| {
+            WasmRuntimeError::Error(Error::Others(format!(
+                "Replace dylib from docker base image fail: {}",
+                err
+            )))
+        })?;
+    }
+
+    PluginManager::load(Some(Path::new("/opt/containerd/lib")))?;
+    let vm = vm.auto_detect_plugins()?;
 
     let mut cmd = args[0].clone();
     let stripped = args[0].strip_prefix(std::path::MAIN_SEPARATOR);
@@ -299,15 +341,7 @@ impl Instance for Wasi {
                 // TODO: How to get exit code?
                 // This was relatively straight forward in go, but wasi and wasmtime are totally separate things in rust.
                 let (lock, cvar) = &*exit_code;
-
-                let mut job = JOB.write().unwrap();
-                *job = Some(
-                    vm.run_func_async(Some("main"), "_start", params!())
-                        .unwrap(),
-                );
-                drop(job);
-
-                let _ret = match (&*JOB.read().unwrap()).as_ref().unwrap().get_async() {
+                let _ret = match vm.run_func(Some("main"), "_start", params!()) {
                     Ok(_) => {
                         debug!("exit code: {}", 0);
                         let mut ec = lock.lock().unwrap();
@@ -319,7 +353,6 @@ impl Instance for Wasi {
                         *ec = Some((137, Utc::now()));
                     }
                 };
-
                 cvar.notify_all();
             })?;
 
@@ -342,19 +375,11 @@ impl Instance for Wasi {
     }
 
     fn kill(&self, _signal: u32) -> Result<(), Error> {
-        match &*JOB.read().unwrap() {
-            Some(job) => {
-                job.cancel();
-                let code = self.exit_code.clone();
-                let (lock, cvar) = &*code;
-                let mut ec = lock.lock().unwrap();
-                *ec = Some((137, Utc::now()));
-                cvar.notify_one();
-            }
-            None => {
-                // no running wasm task
-            }
-        };
+        let code = self.exit_code.clone();
+        let (lock, cvar) = &*code;
+        let mut ec = lock.lock().unwrap();
+        *ec = Some((137, Utc::now()));
+        cvar.notify_one();
         Ok(())
     }
 
@@ -393,9 +418,8 @@ mod wasitest {
     use tempfile::tempdir;
     use wasmedge_sdk::{
         config::{CommonConfigOptions, ConfigBuilder},
-        Vm,
+        wat2wasm,
     };
-    use wasmedge_types::wat2wasm;
 
     // This is taken from https://github.com/bytecodealliance/wasmtime/blob/6a60e8363f50b936e4c4fc958cb9742314ff09f3/docs/WASI-tutorial.md?plain=1#L270-L298
     const WASI_HELLO_WAT: &[u8]= r#"(module
@@ -432,7 +456,7 @@ mod wasitest {
         let config = ConfigBuilder::new(CommonConfigOptions::default())
             .build()
             .unwrap();
-        let vm = Vm::new(Some(config)).unwrap();
+        let vm = VmBuilder::new().with_config(config).build().unwrap();
         let i = Wasi::new("".to_string(), Some(&InstanceConfig::new(vm)));
         i.delete().unwrap();
     }
@@ -505,18 +529,16 @@ mod wasitest {
 impl EngineGetter for Wasi {
     type E = Vm;
     fn new_engine() -> Result<Vm, Error> {
-        utils::load_plugin_from_default_paths();
         let mut host_options = HostRegistrationConfigOptions::default();
         host_options = host_options.wasi(true);
-        #[cfg(all(target_os = "linux", feature = "wasi_nn", target_arch = "x86_64"))]
-        {
-            host_options = host_options.wasi_nn(true);
-        }
         let config = ConfigBuilder::new(CommonConfigOptions::default())
             .with_host_registration_config(host_options)
             .build()
             .map_err(anyhow::Error::msg)?;
-        let vm = Vm::new(Some(config)).map_err(anyhow::Error::msg)?;
+        let vm = VmBuilder::new()
+            .with_config(config)
+            .build()
+            .unwrap();
         Ok(vm)
     }
 }

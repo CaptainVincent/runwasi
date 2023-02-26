@@ -112,3 +112,21 @@ jobs:
         run: make load
       - name: Run basic test
         run: sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasi-demo-app:latest testwasm /wasi-demo-app.wasm echo 'hello'
+      - name: Manually build wasi_nn demo image
+        run: |
+          cp demo/utils/build.rs demo/wasinn/pytorch-mobilenet-image/rust
+          cd demo/wasinn/pytorch-mobilenet-image/rust
+          cargo add --build tar@0.4 sha256@1.1 log@0.4 env_logger@0.10 oci-spec@0.5 anyhow@1.0
+          cargo add --build oci-tar-builder --git https://github.com/containerd/runwasi --rev a2f86e4
+          cargo build --target=wasm32-wasi
+          BUILD_IMAGE=TRUE cargo build --target=wasm32-wasi
+          sudo ctr -n default image import --all-platforms target/wasm32-wasi/debug/img.tar
+      - name: Run wasi_nn test
+        run: |
+          wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/main/rust/examples/images/1.jpg -O demo/wasinn/pytorch-mobilenet-image/input.jpg
+          sudo ctr run --rm \
+            --mount type=bind,src=$PWD/demo/wasinn/pytorch-mobilenet-image,dst=/resource,options=rbind:ro \
+            --runtime=io.containerd.wasmedge.v1 \
+            ghcr.io/containerd/runwasi/wasmedge-wasinn-example-mobilenet-image:latest \
+            testwasinn \
+            /app.wasm /resource/mobilenet.pt /resource/input.jpg

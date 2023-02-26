@@ -13,8 +13,8 @@ Before proceeding, it's also recommended to install Docker Desktop on Windows an
 To finish off installing pre-requisites, install Rust following [this](https://www.rust-lang.org/tools/install).
 
 After following these steps and navigating to the runwasi directory in your terminal:
-- run `make build FEATURES=wasmedge`,
-- run `make install RUNTIME=wasmedge`,
+- run `make build`,
+- run `make install`,
 - run `make test/out/img.tar`,
 - open a secondary terminal and run `containerd`, and
 - run `make load`.

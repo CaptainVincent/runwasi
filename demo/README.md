@@ -8,7 +8,7 @@
 - [WASI NN](https://github.com/second-state/runwasi/tree/main/demo#case-5-wasi-nn-x86-only)
 - [WasmEdge rootfs/mounts demo](https://github.com/second-state/runwasi/tree/main/demo#case-6-rootfsmounts-demo)
 
-All below demo cases should be run after all shim components already installed that mentioned in [README.md](../README.md#examples). 
+All below demo cases should be run after all shim components already installed that mentioned in [README.md](../README.md#examples).
 
 ## Build and load all demo images first
 
@@ -223,7 +223,7 @@ $ sudo ctr run --rm --net-host --env DATABASE_URL=mysql://root:123@127.0.0.1:330
 ```
 
 - Output
-```terminal 
+```terminal
 [src/bin/query.rs:28] selected_dbs = [
     Db {
         host: "localhost",
@@ -459,7 +459,7 @@ Environment="WASMEDGE_PLUGIN_PATH=<Your Plugin Install Path>"
 
 - Build and install wasmedge shim with support wasi-nn plugin
 ```terminal
-$ make build FEATURES=wasi_nn
+$ make build
 $ sudo make install
 ```
 

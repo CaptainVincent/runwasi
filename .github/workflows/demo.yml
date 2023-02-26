@@ -115,7 +115,7 @@ jobs:
 
     - name: Build and install conatiner wasmedge shim with support wasi-nn plugin
       run: |
-        make build FEATURES=wasi_nn
+        make build
         sudo make install
 
     - name: Add WASMEDGE_PLUGIN_PATH into service containerd

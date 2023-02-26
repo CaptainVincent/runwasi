@@ -17,14 +17,9 @@ ifeq ($(TARGET),release)
 RELEASE_FLAG = --release
 endif
 
-FEATURES_FLAG :=
-ifneq ($(FEATURES),)
-FEATURES_FLAG = --features $(FEATURES)
-endif
-
 .PHONY: build
 build:
-	cargo build $(RELEASE_FLAG) $(FEATURES_FLAG)
+	cargo build $(RELEASE_FLAG)
 
 clean:
 	cargo clean
