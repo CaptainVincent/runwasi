@@ -1,5 +1,6 @@
 use libc::{dup, dup2, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use std::collections::HashMap;
+use std::env;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::io::Write;
@@ -20,7 +21,7 @@ use log::{debug, error};
 use nix::{sys::signal, unistd::Pid};
 use wasmedge_sdk::{
     config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions},
-    params, Vm,
+    params, ImportObjectBuilder, Vm,
 };
 use wasmedge_sys::{utils, AsyncResult};
 
@@ -161,6 +162,20 @@ pub fn prepare_module(
             dup2(stderr.unwrap(), STDERR_FILENO);
         }
     }
+
+    if let Err(_) = env::var("WASMEDGE_PLUGIN_PATH") {
+        env::set_var("WASMEDGE_PLUGIN_PATH", "/opt/containerd/lib");
+    }
+    utils::load_plugin_from_default_paths();
+
+    #[cfg(all(target_os = "linux", feature = "wasi_nn", target_arch = "x86_64"))]
+    let vm: Vm = match ImportObjectBuilder::new().build_as_wasi_nn() {
+        Ok(import) => vm.register_import_module(import).unwrap(),
+        Err(error_msg) => {
+            debug!("load plugin fail reason: {}", error_msg);
+            vm
+        }
+    };
 
     let mut cmd = args[0].clone();
     let stripped = args[0].strip_prefix(std::path::MAIN_SEPARATOR);
@@ -505,13 +520,8 @@ mod wasitest {
 impl EngineGetter for Wasi {
     type E = Vm;
     fn new_engine() -> Result<Vm, Error> {
-        utils::load_plugin_from_default_paths();
         let mut host_options = HostRegistrationConfigOptions::default();
         host_options = host_options.wasi(true);
-        #[cfg(all(target_os = "linux", feature = "wasi_nn", target_arch = "x86_64"))]
-        {
-            host_options = host_options.wasi_nn(true);
-        }
         let config = ConfigBuilder::new(CommonConfigOptions::default())
             .with_host_registration_config(host_options)
             .build()
