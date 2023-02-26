@@ -106,12 +106,10 @@ jobs:
         curl http://localhost:8080/delete_order?id=2
         sudo ctr task kill -s SIGKILL testmicroservice
 
-    - name: Download PyTorch library, Wasmedge Library and WASINN PyTorch plugin
+    - name: Download PyTorch library and reinstall Wasmedge with WASINN PyTorch plugin
       run: |
         ./demo/utils/setup_wasinn_plugin.sh
-        echo "WASMEDGE_INCLUDE_DIR=$PWD/WasmEdge-0.11.1-Linux/include" >> $GITHUB_ENV
-        echo "WASMEDGE_LIB_DIR=$PWD/WasmEdge-0.11.1-Linux/lib" >> $GITHUB_ENV
-        echo "WASMEDGE_PLUGIN_PATH=$PWD/WasmEdge-0.11.1-Linux/lib/wasmedge" >> $GITHUB_ENV
+        echo "WASMEDGE_PLUGIN_PATH=$HOME/.wasmedge/plugin" >> $GITHUB_ENV
 
     - name: Build and install conatiner wasmedge shim with support wasi-nn plugin
       run: |
