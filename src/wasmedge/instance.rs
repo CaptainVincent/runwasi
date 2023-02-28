@@ -18,7 +18,11 @@ use containerd_shim_wasm::sandbox::error::Error;
 use containerd_shim_wasm::sandbox::oci;
 use containerd_shim_wasm::sandbox::{EngineGetter, Instance, InstanceConfig};
 use log::{debug, error};
-use nix::{sys::signal, unistd::Pid};
+use nix::{
+    mount::{mount, MsFlags},
+    sys::signal,
+    unistd::Pid,
+};
 use wasmedge_sdk::{
     config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions},
     params, ImportObjectBuilder, Vm,
@@ -161,6 +165,23 @@ pub fn prepare_module(
             STDERR_FD = Some(dup(STDERR_FILENO));
             dup2(stderr.unwrap(), STDERR_FILENO);
         }
+    }
+
+    let path = format!("{}/lib", rootfs_path);
+    if Path::new(&path).exists() {
+        mount::<str, Path, str, str>(
+            Some(path.as_str()),
+            Path::new("/opt/containerd/lib"),
+            None,
+            MsFlags::MS_BIND,
+            None,
+        )
+        .map_err(|err| {
+            WasmRuntimeError::Error(Error::Others(format!(
+                "Replace dylib from docker base image fail: {}",
+                err
+            )))
+        })?;
     }
 
     if let Err(_) = env::var("WASMEDGE_PLUGIN_PATH") {
