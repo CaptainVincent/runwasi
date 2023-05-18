@@ -32,9 +32,9 @@ RUN <<EOT
         mv ./libtorch/lib/libc10.so /dynlib
         mv ./libtorch/lib/libtorch_cpu.so /dynlib
         mv ./libtorch/lib/libgomp-75eea7e8.so.1 /dynlib
-        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.11.2 --platform=${os^} --machine=$march --plugins wasi_nn-pytorch --dist=ubuntu20.04
+        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.12.1 --platform=${os^} --machine=$march --plugins wasi_nn-pytorch --dist=ubuntu20.04
     else
-        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.11.2 --platform=${os^} --machine=$march
+        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.12.1 --platform=${os^} --machine=$march
     fi
 EOT
 

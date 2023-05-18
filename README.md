@@ -136,7 +136,7 @@ Instead of docker-desktop official release feature `use containerd for pulling a
 Install it and make sure the library is in the search path.
 
 ```terminal
-$ curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+$ curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.12.1
 $ sudo -E sh -c 'echo "$HOME/.wasmedge/lib" > /etc/ld.so.conf.d/libwasmedge.conf'
 $ sudo ldconfig
 ```

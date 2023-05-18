@@ -8,7 +8,7 @@ containerd-shim = "0.3.0"
 containerd-shim-wasm = { path = "crates/containerd-shim-wasm" }
 log = "0.4"
 ttrpc = "0.6"
-wasmedge-sdk = { git = "https://github.com/CaptainVincent/WasmEdge.git", branch = "vincent/rust-autodetect-plugins" }
+wasmedge-sdk = "0.8.1"
 chrono = "0.4.19"
 anyhow = "1.0"
 cap-std = "0.24.1"
