@@ -38,7 +38,7 @@ pub fn get_wasm_mounts(spec: &Spec) -> Vec<&str> {
             .iter()
             .filter_map(|mount| {
                 if let Some(typ) = mount.typ() {
-                    if typ == "bind" || typ == "tmppfs" {
+                    if typ == "bind" || typ == "tmpfs" {
                         return mount.destination().to_str();
                     }
                 }

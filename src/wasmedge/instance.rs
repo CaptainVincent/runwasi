@@ -105,6 +105,34 @@ pub fn reset_stdio() {
     }
 }
 
+pub fn genereate_preopen(spec: &oci_spec::runtime::Spec) -> Vec<String> {
+    let mut preopens: Vec<String> = vec![];
+    if let Some(root) = spec.root() {
+        if let Some(true) = root.readonly() {
+            preopens.push(format!("/:{}:readonly", root.path().to_string_lossy()));
+        } else {
+            preopens.push(format!("/:{}", root.path().to_string_lossy()));
+        }
+    }
+    if let Some(mounts) = spec.mounts() {
+        for mount in mounts {
+            if let Some(typ) = mount.typ() {
+                if typ == "bind" || typ == "tmpfs" {
+                    let path = mount.destination().to_string_lossy();
+                    if let Some(options) = mount.options() {
+                        if options.contains(&"ro".to_string()) {
+                            preopens.push(format!("{}:{}:readonly", path, path));
+                        }
+                    } else {
+                        preopens.push(format!("{}:{}", path, path));
+                    }
+                }
+            }
+        }
+    }
+    return preopens;
+}
+
 pub fn prepare_module(
     mut vm: Vm,
     bundle: String,
@@ -113,28 +141,23 @@ pub fn prepare_module(
     stderr_path: String,
 ) -> Result<Vm, WasmRuntimeError> {
     let mut spec = oci::load(Path::new(&bundle).join("config.json").to_str().unwrap())?;
-
     spec.canonicalize_rootfs(&bundle).map_err(|err| {
         WasmRuntimeError::Error(Error::Others(format!(
             "could not canonicalize rootfs: {}",
             err
         )))
     })?;
-    debug!("opening rootfs");
-    let rootfs_path = oci::get_root(&spec).to_str().unwrap();
-    let mut mounts = oci::get_wasm_mounts(&spec);
-    let root = format!("/:{}", rootfs_path);
-    let mut preopens = vec![root.as_str()];
-    preopens.append(&mut mounts);
+    let rootfs_path: &str = oci::get_root(&spec).to_str().unwrap();
     let envs = oci_utils::env_to_wasi(&spec);
     let args = oci::get_args(&spec);
+    let preopens = genereate_preopen(&spec);
 
     debug!("setting up wasi");
     let wasi_module = vm.wasi_module_mut().ok_or("Not found wasi module").unwrap();
     wasi_module.initialize(
         Some(args.iter().map(|s| s as &str).collect()),
         Some(envs.iter().map(|s| s as &str).collect()),
-        Some(preopens),
+        Some(preopens.iter().map(|s| s as &str).collect()),
     );
 
     debug!("opening stdin");
@@ -173,9 +196,7 @@ pub fn prepare_module(
                 "Ambiguous to identify plugins path"
             ))));
         }
-        (Some(host_path), None) => {
-            host_path.to_owned()
-        }
+        (Some(host_path), None) => host_path.to_owned(),
         (None, Some(container_path)) => {
             format!("{}/{}", rootfs_path, container_path)
         }
@@ -535,10 +556,7 @@ impl EngineGetter for Wasi {
             .with_host_registration_config(host_options)
             .build()
             .map_err(anyhow::Error::msg)?;
-        let vm = VmBuilder::new()
-            .with_config(config)
-            .build()
-            .unwrap();
+        let vm = VmBuilder::new().with_config(config).build().unwrap();
         Ok(vm)
     }
 }
