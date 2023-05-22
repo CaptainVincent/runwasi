@@ -127,9 +127,11 @@ You will need to make sure the containerd-wasmedged daemon has already been star
 
 #### Test and demo with containerd
 
+Instead of run the shim built from youself, you can try our experimental installation workflow [here](docs/experimental.md#Installation).
+
 **Attention**
 
-Instead of docker-desktop official release feature `use containerd for pulling and storing images` enable, below operations we talk is build a local image and interact with the container base on image we built.
+Instead of docker-desktop official release with feature `use containerd for pulling and storing images` is stable, below operations we talk is build a local image and interact with the container base on image we built.
 
 - **Install WasmEdge first (If you choose Wasmedge as your wasm runtime)**
 
