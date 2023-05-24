@@ -123,7 +123,6 @@ jobs:
           sudo ctr -n default image import --all-platforms target/wasm32-wasi/debug/img.tar
       - name: Run wasi_nn test
         run: |
-          wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/main/rust/examples/images/1.jpg -O demo/wasinn/pytorch-mobilenet-image/input.jpg
           sudo ctr run --rm \
             --mount type=bind,src=$PWD/demo/wasinn/pytorch-mobilenet-image,dst=/resource,options=rbind \
             --runtime=io.containerd.wasmedge.v1 \

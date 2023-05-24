@@ -463,11 +463,6 @@ $ make build
 $ sudo make install
 ```
 
-- Download test image
-```terminal
-wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/main/rust/examples/images/1.jpg -O demo/wasinn/pytorch-mobilenet-image/input.jpg
-```
-
 Congratulations!! We done.
 
 ### Execution
