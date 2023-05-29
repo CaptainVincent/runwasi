@@ -125,7 +125,7 @@ jobs:
         run: |
           wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/main/rust/examples/images/1.jpg -O demo/wasinn/pytorch-mobilenet-image/input.jpg
           sudo ctr run --rm \
-            --mount type=bind,src=$PWD/demo/wasinn/pytorch-mobilenet-image,dst=/resource,options=rbind:ro \
+            --mount type=bind,src=$PWD/demo/wasinn/pytorch-mobilenet-image,dst=/resource,options=rbind \
             --runtime=io.containerd.wasmedge.v1 \
             ghcr.io/containerd/runwasi/wasmedge-wasinn-example-mobilenet-image:latest \
             testwasinn \

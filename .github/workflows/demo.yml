@@ -87,7 +87,7 @@ jobs:
     - name: Run rootfs mounts demo conatiner
       run: |
         sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
-          --mount type=bind,src=$PWD/demo/wasmedge-rootfs-mounts-demo,dst=/mnt,options=rbind:ro \
+          --mount type=bind,src=$PWD/demo/wasmedge-rootfs-mounts-demo,dst=/mnt,options=rbind \
           ghcr.io/containerd/runwasi/wasmedge-rootfs-mounts-demo:latest preopens
 
     - name: Run microservice with database demo conatiner
