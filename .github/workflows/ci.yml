@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches: [enhance-plugin-usability]
     tags:
       - 'v*'
   pull_request:
@@ -21,9 +21,9 @@ jobs:
       matrix:
         include:
           - kind: legacy
-            repo_slug: wasmedge/runwasi
+            repo_slug: vincent2nd/runwasi
           - kind: installable
-            repo_slug: wasmedge/runwasi-installable
+            repo_slug: vincent2nd/runwasi-installable
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     steps:
@@ -102,8 +102,8 @@ jobs:
           submodules: recursive
       - name: Install wasmedge shim and libs from prebuilt docker image
         run: |
-          sudo ctr content fetch docker.io/wasmedge/runwasi-installable:latest
-          sudo ctr install docker.io/wasmedge/runwasi-installable:latest -l -r
+          sudo ctr content fetch docker.io/vincent2nd/runwasi-installable:latest
+          sudo ctr install docker.io/vincent2nd/runwasi-installable:latest -l -r
       - name: Update rust toolchain
         run: |
           rustup default nightly
