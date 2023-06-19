@@ -1,0 +1,11 @@
+services:
+  wasinn:
+    image: demo-wasinn
+    volumes:
+      - ./wasinn/pytorch-mobilenet-image:/resource
+    command: ["/resource/mobilenet.pt", "/resource/input.jpg"]
+    platform: wasi/wasm
+    build:
+      context: .
+      target: wasinn
+    runtime: io.containerd.wasmedge.v1
