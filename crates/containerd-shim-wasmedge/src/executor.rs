@@ -78,6 +78,7 @@ impl Executor for WasmEdgeExecutor {
 impl WasmEdgeExecutor {
     fn prepare(&self, args: &[String], spec: &Spec) -> anyhow::Result<wasmedge_sdk::Vm> {
         let envs = env_to_wasi(spec);
+        let preopens = genereate_preopen(&spec);
         let config = ConfigBuilder::new(CommonConfigOptions::default())
             .with_host_registration_config(HostRegistrationConfigOptions::default().wasi(true))
             .build()
@@ -93,7 +94,7 @@ impl WasmEdgeExecutor {
         wasi_module.initialize(
             Some(args.iter().map(|s| s as &str).collect()),
             Some(envs.iter().map(|s| s as &str).collect()),
-            None,
+            Some(preopens.iter().map(|s| s as &str).collect()),
         );
 
         let (module_name, _) = oci::get_module(spec);
@@ -130,4 +131,32 @@ fn env_to_wasi(spec: &Spec) -> Vec<String> {
         .as_ref()
         .unwrap_or(&default);
     env.to_vec()
+}
+
+fn genereate_preopen(spec: &Spec) -> Vec<String> {
+    let mut preopens: Vec<String> = vec![];
+    if let Some(root) = spec.root() {
+        if let Some(true) = root.readonly() {
+            preopens.push(format!("/:{}:readonly", root.path().to_string_lossy()));
+        } else {
+            preopens.push(format!("/:{}", root.path().to_string_lossy()));
+        }
+    }
+    if let Some(mounts) = spec.mounts() {
+        for mount in mounts {
+            if let Some(typ) = mount.typ() {
+                if typ == "bind" || typ == "tmpfs" {
+                    let path = mount.destination().to_string_lossy();
+                    if let Some(options) = mount.options() {
+                        if options.contains(&"ro".to_string()) {
+                            preopens.push(format!("{}:{}:readonly", path, path));
+                        }
+                    } else {
+                        preopens.push(format!("{}:{}", path, path));
+                    }
+                }
+            }
+        }
+    }
+    return preopens;
 }
