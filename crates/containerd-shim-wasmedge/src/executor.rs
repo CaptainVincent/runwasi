@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use containerd_shim_wasm::sandbox::oci;
 use nix::unistd::{dup, dup2};
 use oci_spec::runtime::Spec;
@@ -6,11 +6,16 @@ use oci_spec::runtime::Spec;
 use libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use libcontainer::workload::{Executor, ExecutorError};
 use log::debug;
+use nix::mount::{mount, MsFlags};
+use std::collections::HashMap;
+use std::path::Path;
 use std::{os::unix::io::RawFd, path::PathBuf};
 
 use wasmedge_sdk::{
     config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions},
-    params, VmBuilder,
+    params,
+    plugin::PluginManager,
+    VmBuilder,
 };
 
 const EXECUTOR_NAME: &str = "wasmedge";
@@ -77,6 +82,9 @@ impl Executor for WasmEdgeExecutor {
 
 impl WasmEdgeExecutor {
     fn prepare(&self, args: &[String], spec: &Spec) -> anyhow::Result<wasmedge_sdk::Vm> {
+        let rootfs_path: &str = oci::get_root(&spec)
+            .to_str()
+            .expect("Rootfs path contains invalid UTF-8 characters.");
         let envs = env_to_wasi(spec);
         let preopens = genereate_preopen(&spec);
         let config = ConfigBuilder::new(CommonConfigOptions::default())
@@ -117,6 +125,39 @@ impl WasmEdgeExecutor {
             dup(STDERR_FILENO)?;
             dup2(stderr, STDERR_FILENO)?;
         }
+
+        let envs = parse_env(&envs);
+        let plugins_on_host_path = envs.get("WASMEDGE_PLUGIN_HOST_PATH");
+        let plugins_in_container_path: Option<_> = envs.get("WASMEDGE_PLUGIN_PATH");
+        let path: String = match (plugins_on_host_path, plugins_in_container_path) {
+            (Some(_), Some(_)) => {
+                return Err(anyhow!("Ambiguous to identify plugins path"));
+            }
+            (Some(host_path), None) => host_path.to_owned(),
+            (None, Some(container_path)) => {
+                format!("{}/{}", rootfs_path, container_path)
+            }
+            (None, None) => {
+                format!("/opt/containerd/lib")
+            }
+        };
+
+        // Shadow host's /opt/containerd/lib/
+        if Path::new(&path).exists() && path != "/opt/containerd/lib" {
+            mount::<str, Path, str, str>(
+                Some(path.as_str()),
+                Path::new("/opt/containerd/lib"),
+                None,
+                MsFlags::MS_BIND,
+                None,
+            )
+            .map_err(|err| {
+                return anyhow!("Replace dylib from docker base image fail: {}", err);
+            })?;
+        }
+
+        PluginManager::load(Some(Path::new("/opt/containerd/lib")))?;
+        let vm = vm.auto_detect_plugins()?;
         Ok(vm)
     }
 }
@@ -131,6 +172,20 @@ fn env_to_wasi(spec: &Spec) -> Vec<String> {
         .as_ref()
         .unwrap_or(&default);
     env.to_vec()
+}
+
+fn parse_env(envs: &[String]) -> HashMap<String, String> {
+    // make NAME=VALUE to HashMap<NAME, VALUE>.
+    envs.iter()
+        .filter_map(|e| {
+            let mut split = e.split('=');
+
+            split.next().map(|key| {
+                let value = split.collect::<Vec<&str>>().join("=");
+                (key.into(), value)
+            })
+        })
+        .collect()
 }
 
 fn genereate_preopen(spec: &Spec) -> Vec<String> {
