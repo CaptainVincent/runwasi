@@ -1,0 +1,122 @@
+name: examples
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+  push:
+    branches: [CI]
+  schedule:
+    - cron: "0 0 */1 * *"
+
+jobs:
+  run-all-examples:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install apt-get packages
+      run: |
+        sudo ACCEPT_EULA=Y apt-get update
+        sudo ACCEPT_EULA=Y apt-get upgrade
+        sudo apt-get install wget git curl software-properties-common build-essential libdbus-1-dev pkg-config libseccomp-dev
+
+    - name: Manually update GitHub's containerd
+      run: |
+        wget https://github.com/containerd/containerd/releases/download/v1.7.5/containerd-1.7.5-linux-amd64.tar.gz
+        sudo tar Czxvf /usr containerd-1.7.5-linux-amd64.tar.gz
+        sudo systemctl restart containerd
+
+    - name: Install and run MySQL
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install mysql-server libmysqlclient-dev curl
+        sudo service mysql start
+        mysql -e "PURGE BINARY LOGS BEFORE now();" -uroot -proot
+
+    - name: Install WasmEdge WASINN plugin dependencies
+      run: |
+        sudo ctr content fetch docker.io/vincent2nd/runwasi-wasinn:latest
+        sudo ctr install docker.io/vincent2nd/runwasi-wasinn:latest -l -r
+
+    - name: Install WasmEdge lib
+      run: |
+        curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.13.4
+
+    - name: Build and install WasmEdge shim
+      run: |
+        rustup target add wasm32-wasi
+        cargo build --package containerd-shim-wasmedge --no-default-features
+        sudo make install
+
+    - name: Build all test and demo OCI images
+      run: |
+        make load
+        make load_demo
+
+    - name: Run basic test case
+      run: |
+        sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasi-demo-app:latest testwasm /wasi-demo-app.wasm echo 'hello'
+
+    - name: Run hype demo conatiner
+      run: |
+        sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasmedge_hyper_client:latest testclient
+        nohup sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasmedge_hyper_server:latest testserver &
+
+    - name: Test hyper server
+      run: |
+        curl http://localhost:8080/echo -X POST -d "WasmEdge"
+        sudo ctr task kill -s SIGKILL testserver
+
+    - name: Run reqwest demo conatiner
+      run: |
+        sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasmedge_reqwest_demo:latest testreqwest
+
+    - name: Run db demo conatiner
+      run: |
+        sudo ctr run --rm --net-host --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasmedge-mysql-driver-demo:latest testdb /insert.wasm
+        sudo ctr run --rm --net-host --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/wasmedge-mysql-driver-demo:latest testdb /query.wasm
+        sudo ctr run --rm --net-host --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql --runtime=io.containerd.wasmedge.v1 ghcr.io/containerd/runwasi/crud:latest testdb
+
+    - name: Run rootfs mounts demo conatiner
+      run: |
+        sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
+          --mount type=bind,src=$PWD/demo/rootfs-mounts,dst=/mnt,options=rbind:ro \
+          ghcr.io/containerd/runwasi/wasmedge-rootfs-mounts-demo:latest preopens
+
+    - name: Run microservice with database demo conatiner
+      run: |
+        nohup sudo ctr run --rm --net-host \
+          --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
+          --runtime=io.containerd.wasmedge.v1 \
+          ghcr.io/containerd/runwasi/order_demo_service:latest testmicroservice &
+
+    - name: Test microservice
+      run: |
+        curl http://localhost:8080/init
+        curl http://localhost:8080/create_orders -X POST -d @demo/microservice_db/orders.json
+        curl http://localhost:8080/orders
+        curl http://localhost:8080/update_order -X POST -d @demo/microservice_db/update_order.json
+        curl http://localhost:8080/delete_order?id=2
+        sudo ctr task kill -s SIGKILL testmicroservice
+
+    - name: Run WASI-NN PyTorch demo conatiner
+      run: |
+        sudo ctr run --rm --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
+          --mount type=bind,src=$PWD/demo/wasinn/pytorch-mobilenet-image,dst=/resource,options=rbind:ro \
+          --mount type=bind,src=/opt/containerd/lib,dst=/opt/containerd/lib,options=bind:ro \
+          --runtime=io.containerd.wasmedge.v1 \
+          ghcr.io/containerd/runwasi/wasmedge-wasinn-example-mobilenet-image:latest \
+          testwasinn /app.wasm /resource/mobilenet.pt /resource/input.jpg
