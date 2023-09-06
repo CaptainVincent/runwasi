@@ -1,17 +1,23 @@
-#[cfg(feature = "oci-v1-tar")]
 use {
     anyhow::Context, oci_spec::image as spec, oci_tar_builder::Builder, sha256::try_digest,
     std::env, std::fs::File, std::path::PathBuf,
 };
 
-#[cfg(not(feature = "oci-v1-tar"))]
-fn main() {}
-
-#[cfg(feature = "oci-v1-tar")]
 fn main() {
+    println!("cargo:rerun-if-env-changed=BUILD_IMAGE");
+    let enable_build_img = env::var("BUILD_IMAGE")
+        .map(|v| v == "TRUE")
+        .unwrap_or(false); // run by default
+
+    if !enable_build_img {
+        return;
+    }
+
     env_logger::init();
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let pkg_name = env::var("CARGO_PKG_NAME").unwrap();
+    let wasm_name = format!("{}.wasm", pkg_name);
     let p = out_dir.join("img.tar");
     let bin_output_dir = out_dir
         .parent()
@@ -21,18 +27,37 @@ fn main() {
         .parent()
         .unwrap();
 
-    let app_path = bin_output_dir.join("wasi-demo-app.wasm");
+    let app_path = bin_output_dir.join(wasm_name);
     let layer_path = out_dir.join("layer.tar");
-    tar::Builder::new(File::create(&layer_path).unwrap())
-        .append_path_with_name(&app_path, "wasi-demo-app.wasm")
-        .unwrap();
+    let mut layer_builder = tar::Builder::new(File::create(&layer_path).unwrap());
+    if app_path.exists() {
+        layer_builder
+            .append_path_with_name(&app_path, "app.wasm")
+            .unwrap();
+    } else {
+        for element in bin_output_dir.read_dir().unwrap() {
+            let path = element.unwrap().path();
+            if let Some(extension) = path.extension() {
+                if extension == "wasm" {
+                    layer_builder
+                        .append_path_with_name(&path, path.file_name().unwrap())
+                        .unwrap();
+                }
+            }
+        }
+    }
 
     let mut builder = Builder::default();
-
     builder.add_layer(&layer_path);
 
+    let entrypoint = if app_path.exists() {
+        vec!["/app.wasm".to_owned()]
+    } else {
+        vec![]
+    };
+
     let config = spec::ConfigBuilder::default()
-        .entrypoint(vec!["/wasi-demo-app.wasm".to_owned()])
+        .entrypoint(entrypoint)
         .build()
         .unwrap();
 
@@ -53,7 +78,7 @@ fn main() {
 
     builder.add_config(
         img,
-        "ghcr.io/captainvincent/wasi-demo-app:latest".to_string(),
+        format!("ghcr.io/captainvincent/{}:latest", pkg_name).to_string(),
     );
 
     let f = File::create(&p).unwrap();
