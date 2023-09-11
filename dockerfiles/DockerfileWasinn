@@ -1,0 +1,20 @@
+FROM ubuntu:latest AS base
+RUN apt-get update && apt-get install -y curl git python3 unzip
+RUN <<EOT
+    pytorch_version=1.8.2
+    curl -s -L -O --remote-name-all https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-cxx11-abi-shared-with-deps-${pytorch_version}%2Bcpu.zip
+    unzip -q "libtorch-cxx11-abi-shared-with-deps-${pytorch_version}%2Bcpu.zip"
+    mkdir -p /dynlib
+    mv ./libtorch/lib/libtorch.so /dynlib
+    mv ./libtorch/lib/libc10.so /dynlib
+    mv ./libtorch/lib/libtorch_cpu.so /dynlib
+    mv ./libtorch/lib/libgomp-75eea7e8.so.1 /dynlib
+    curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -v 0.13.4 --plugins wasi_nn-pytorch
+EOT
+
+FROM scratch AS release
+COPY --link --from=base /dynlib/ /lib/
+COPY --link --from=base /root/.wasmedge/lib/* /lib/
+COPY --link --from=base /root/.wasmedge/plugin/* /lib/
+
+FROM release
