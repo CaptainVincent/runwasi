@@ -1,12 +1,14 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use containerd_shim_wasm::libcontainer_instance::LinuxContainerExecutor;
 use containerd_shim_wasm::sandbox::{oci, Stdio};
+use libcontainer::utils::parse_env;
 use libcontainer::workload::{Executor, ExecutorError, ExecutorValidationError};
 use log::debug;
 use oci_spec::runtime::Spec;
 use wasmedge_sdk::config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions};
+use wasmedge_sdk::plugin::PluginManager;
 use wasmedge_sdk::{params, VmBuilder};
 
 const EXECUTOR_NAME: &str = "wasmedge";
@@ -73,7 +75,7 @@ impl Executor for WasmEdgeExecutor {
 impl WasmEdgeExecutor {
     fn prepare(&self, args: &[String], spec: &Spec) -> anyhow::Result<wasmedge_sdk::Vm> {
         let envs = env_to_wasi(spec);
-        let preopens = genereate_preopen(&spec);
+        let preopens = genereate_preopen(spec);
         let config = ConfigBuilder::new(CommonConfigOptions::default())
             .with_host_registration_config(HostRegistrationConfigOptions::default().wasi(true))
             .build()
@@ -97,6 +99,10 @@ impl WasmEdgeExecutor {
             Some(m) => m,
             None => return Err(anyhow::Error::msg("no module provided cannot load module")),
         };
+
+        let envs = parse_env(&envs);
+        PluginManager::load(envs.get("WASMEDGE_PLUGIN_PATH").map(Path::new))?;
+        let vm = vm.auto_detect_plugins()?;
         let vm = vm
             .register_module_from_file("main", module_name)
             .map_err(|err| ExecutorError::Execution(err))?;
@@ -138,7 +144,7 @@ fn genereate_preopen(spec: &Spec) -> Vec<String> {
             }
         }
     }
-    return preopens;
+    preopens
 }
 
 fn can_handle(spec: &Spec) -> Result<(), ExecutorValidationError> {
