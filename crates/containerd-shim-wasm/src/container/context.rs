@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use oci_spec::runtime::Spec;
+use oci_spec::runtime::{Mount, Spec};
 
 pub trait RuntimeContext {
     // ctx.args() returns arguments from the runtime spec process field, including the
@@ -20,6 +20,11 @@ pub trait RuntimeContext {
     //   "my_module.wat" -> { path: "my_module.wat", func: "_start" }
     //   "#init" -> { path: "", func: "init" }
     fn wasi_entrypoint(&self) -> WasiEntrypoint;
+
+    // ctx.mounts() is a wrapper function
+    // Used to keep the ability for the runtime to determine how to handle the folder
+    // that being bound into the container.
+    fn mounts(&self) -> &Option<Vec<Mount>>;
 }
 
 pub struct WasiEntrypoint {
@@ -47,6 +52,10 @@ impl RuntimeContext for Spec {
             path: PathBuf::from(path),
             func: func.to_string(),
         }
+    }
+
+    fn mounts(&self) -> &Option<Vec<Mount>> {
+        self.mounts()
     }
 }
 
