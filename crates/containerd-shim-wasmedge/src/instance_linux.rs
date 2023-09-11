@@ -1,7 +1,10 @@
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use containerd_shim_wasm::container::{
     Engine, Instance, PathResolve, RuntimeContext, Stdio, WasiEntrypoint,
 };
+use libcontainer::utils::parse_env;
 use oci_spec::runtime::Mount;
 use wasmedge_sdk::config::{ConfigBuilder, HostRegistrationConfigOptions};
 use wasmedge_sdk::plugin::PluginManager;
@@ -15,13 +18,8 @@ pub struct WasmEdgeEngine {
 
 impl Default for WasmEdgeEngine {
     fn default() -> Self {
-        PluginManager::load(None).unwrap();
-
         let host_options = HostRegistrationConfigOptions::default();
         let host_options = host_options.wasi(true);
-        #[cfg(all(target_os = "linux", feature = "wasi_nn", target_arch = "x86_64"))]
-        let host_options = host_options.wasi_nn(true);
-
         let config = ConfigBuilder::default()
             .with_host_registration_config(host_options)
             .build()
@@ -60,6 +58,9 @@ impl Engine for WasmEdgeEngine {
             None => "main".to_string(),
         };
 
+        let envs = parse_env(&envs);
+        PluginManager::load(envs.get("WASMEDGE_PLUGIN_PATH").map(Path::new))?;
+        let vm = vm.auto_detect_plugins()?;
         let vm = vm
             .register_module_from_file(&mod_name, &path)
             .context("registering module")?;
