@@ -29,7 +29,7 @@ jobs:
       run: |
         sudo ACCEPT_EULA=Y apt-get update
         sudo ACCEPT_EULA=Y apt-get upgrade
-        sudo apt-get install wget git curl software-properties-common build-essential libdbus-1-dev pkg-config libseccomp-dev llvm-amdgpu
+        sudo apt-get install wget git curl software-properties-common build-essential libdbus-1-dev pkg-config libseccomp-dev llvm-14-dev liblld-14-dev
 
     - name: Manually update GitHub's containerd
       run: |
