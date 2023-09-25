@@ -6,20 +6,7 @@ TEST_IMG_NAME ?= wasmtest:latest
 RUNTIMES ?= wasmedge wasmtime wasmer
 CONTAINERD_NAMESPACE ?= default
 
-ifeq ($(CARGO),cross)
-# Set the default target as defined in Cross.toml
-TARGET ?= $(shell uname -m)-unknown-linux-musl
-# When using `cross` we need to run the tests outside the `cross` container.
-# We stop `cargo test` from running the tests with the `--no-run` flag.
-# We then need to run the generate test binary manually.
-# For that we use `--message-format=json` and `jq` to find the name of the binary, `xargs` and execute it.
-TEST_ARGS_SEP= --no-run --color=always --message-format=json | \
-	jq -R '. as $$line | try (fromjson | .executable | strings) catch ($$line+"\n" | stderr | empty)' -r | \
-	xargs -I_ ./scripts/test-runner.sh ./_
-else
-TARGET ?= $(shell rustc --version -v | sed -En 's/host: (.*)/\1/p')
-TEST_ARGS_SEP= --
-endif
+TARGET ?=
 
 OPT_PROFILE ?= debug
 RELEASE_FLAG :=
@@ -30,7 +17,7 @@ ifneq ($(TARGET),)
 TARGET_FLAG = --target=$(TARGET)
 endif
 
-FEATURES_wasmedge = 
+FEATURES_wasmedge =
 WARNINGS = -D warnings
 ifeq ($(OS), Windows_NT)
 # need to turn off static/standalone for wasm-edge
@@ -109,7 +96,7 @@ test-%:
 .PHONY: install install-%
 install: $(RUNTIMES:%=install-%);
 
-install-%: build-%
+install-%:
 	mkdir -p $(PREFIX)/bin
 	$(INSTALL) target/$(TARGET)/$(OPT_PROFILE)/containerd-shim-$*-v1 $(PREFIX)/bin/
 	$(LN) ./containerd-shim-$*-v1 $(PREFIX)/bin/containerd-shim-$*d-v1
