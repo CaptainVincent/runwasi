@@ -1,0 +1,95 @@
+name: docker-demo
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+  push:
+    branches:
+      - CI
+  schedule:
+    - cron: "0 0 */1 * *"
+
+jobs:
+  run-all-examples:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Manually update GitHub's containerd
+        run: |
+          wget https://github.com/containerd/containerd/releases/download/v1.7.5/containerd-1.7.5-linux-amd64.tar.gz
+          sudo tar Czxvf /usr containerd-1.7.5-linux-amd64.tar.gz
+          sudo systemctl restart containerd
+
+      - name: Set up Docker
+        uses: crazy-max/ghaction-setup-docker@v2
+        with:
+          daemon-config: |
+            {
+              "debug": true,
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
+      - name: Install and run MySQL
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install mysql-server libmysqlclient-dev curl
+          sudo service mysql start
+          mysql -e "PURGE BINARY LOGS BEFORE now();" -uroot -proot
+
+      - name: Install default wasmedge shim from ctr opt control mechanism
+        run: |
+          sudo ctr content fetch docker.io/vincent2nd/runwasi-wasmedge:latest
+          sudo ctr install docker.io/vincent2nd/runwasi-wasmedge:latest -l -r
+
+      - name: Run basic test case
+        run: docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm ghcr.io/captainvincent/wasi-demo-app:latest echo 'hello'
+
+      - name: Run hyper client example
+        run: docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm ghcr.io/captainvincent/wasmedge_hyper_client:latest
+
+      - name: Run hyper server example
+        run: |
+          docker run --name server -p 8080:8080 -d --rm --runtime=io.containerd.wasmedge.v1 \
+            --platform wasi/wasm ghcr.io/captainvincent/wasmedge_hyper_server:latest
+          sleep 1
+          curl http://localhost:8080/echo -X POST -d "WasmEdge"
+          docker stop server
+
+      - name: Run reqwest demo example
+        run: docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm ghcr.io/captainvincent/wasmedge_reqwest_demo:latest
+
+      - name: Run rootfs mounts example
+        run: |
+          docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm \
+            -v $PWD/demo/rootfs-mounts:/mnt \
+            ghcr.io/captainvincent/wasmedge-rootfs-mounts-demo:latest
+
+      - name: Install WASI-NN PyTorch plugin
+        run: |
+          sudo ctr content fetch docker.io/vincent2nd/runwasi-wasmedge-plugin:lib.wasi_nn-pytorch
+          sudo ctr install docker.io/vincent2nd/runwasi-wasmedge-plugin:lib.wasi_nn-pytorch -l -r
+
+      - name: Run WASI-NN PyTorch example
+        run: |
+          docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm \
+            -v /opt/containerd/lib:/opt/containerd/lib \
+            -v $PWD/demo/wasinn/pytorch-mobilenet-image:/resource \
+            --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
+            ghcr.io/captainvincent/wasmedge-wasinn-example-mobilenet-image:latest \
+            resource/mobilenet.pt /resource/input.jpg
