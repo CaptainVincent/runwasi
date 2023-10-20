@@ -6,7 +6,7 @@ concurrency:
 on:
   push:
     branches:
-      - "CI"
+      - "preview"
     paths:
       - "demo/**"
       - ".github/workflows/build-demo-img.yml"
@@ -46,7 +46,6 @@ jobs:
 
       - name: Build all test and demo OCI images
         run: |
-          make load
           make load_demo
 
       - name: Push images to ghcr.io
