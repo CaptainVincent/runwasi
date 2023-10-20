@@ -30,7 +30,7 @@ RUN <<EOT
     os=$(xx-info os)
     march=$(xx-info march)
     mkdir -p /dynlib
-    curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.13.4 --platform=${os^} --machine=$(xx-info march)
+    curl -sSf https://raw.githubusercontent.com/CaptainVincent/WasmEdge/preview/utils/install.py | python3 - --version 0.14.0-preview --platform=${os^} --machine=$(xx-info march)
 EOT
 
 RUN --mount=type=bind,target=/src,rw,source=. \
