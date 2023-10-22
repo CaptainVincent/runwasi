@@ -71,7 +71,7 @@ jobs:
         run: |
           wget https://github.com/CaptainVincent/WasmEdge/releases/download/1.0.1/WasmEdge-1.0.1-alpine3.16_${{ matrix.arch }}_dynamic.tar.gz
           tar -xzvf WasmEdge-1.0.1-alpine3.16_${{ matrix.arch }}_dynamic.tar.gz
-          echo "WASMEDGE_DIR=$PWD/WasmEdge-1.0.1-Linux" >> ${GITHUB_ENV}
+          echo echo "CROSS_CONTAINER_OPTS=\"-e WASMEDGE_DIR=$PWD/WasmEdge-1.0.1-Linux\"" >> ${GITHUB_ENV}
 
       - name: Build
         timeout-minutes: 10
