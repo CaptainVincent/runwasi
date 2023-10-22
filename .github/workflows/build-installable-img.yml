@@ -6,15 +6,15 @@ concurrency:
 on:
   push:
     branches:
-      - "preview"
+      - "cross"
     tags:
       - "v*.*.*"
-    paths:
-      - "release/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/build-installable.yml"
+    # paths:
+    #   - "release/**"
+    #   - "crates/**"
+    #   - "Cargo.toml"
+    #   - "Cargo.lock"
+    #   - ".github/workflows/build-installable.yml"
 
 jobs:
 
@@ -41,147 +41,184 @@ jobs:
           echo "plugins=$plugins" >> $GITHUB_OUTPUT
         shell: bash
 
-  lib:
-    runs-on: ubuntu-latest
-    needs: [set-plugin-matrix]
+  build:
     strategy:
       matrix:
-        plugin: ${{ fromJSON(needs.set-plugin-matrix.outputs.plugins) }}
-
+        arch: ["x86_64", "aarch64"]
+    runs-on: "ubuntu-22.04"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+      - uses: actions/checkout@v3
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          # list of Docker images to use as base name for tags
-          images: vincent2nd/runwasi-wasmedge-plugin
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            type=raw,value=lib.${{ matrix.plugin }}-preview
-            # type=raw,value=lib.${{ matrix.plugin }}.${{ github.sha }}
-          bake-target: meta-helper
+      - name: Setup build env
+        run: ./scripts/setup-linux.sh
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/bake-action@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         env:
-          plugin: ${{ matrix.plugin }}
-          platforms: ${{ matrix.plugin == 'wasi_nn-pytorch' || matrix.plugin == 'wasi_nn-ggml' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          RUST_CACHE_KEY_OS: rust-release-cache-wasmedge-${{ matrix.arch }}
         with:
-          files: |
-            release/docker-bake.hcl
-            ${{ steps.meta.outputs.bake-file }}
-          targets: lib
-          # set: |
-          #   *.cache-from=type=gha
-          #   *.cache-to=type=gha,mode=max
-          push: ${{ github.event_name != 'pull_request' }}
+          rustflags: '' #Disable.  By default this action sets environment variable is set to -D warnings.  We manage this in the Makefile
 
-  bin:
-    runs-on: ubuntu-latest
+      - name: Setup cross-rs
+        run: ./scripts/setup-cross.sh ${{ matrix.arch }}-unknown-linux-musl
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Setup build profile
+        shell: bash
+        run: echo "OPT_PROFILE=release" >> ${GITHUB_ENV}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+      - name: Manaul install wasmedge
+        shell: bash
+        run: |
+          wget https://github.com/CaptainVincent/WasmEdge/releases/download/1.0.1/WasmEdge-1.0.1-alpine3.16_${{ matrix.arch }}_dynamic.tar.gz
+          tar -xzvf WasmEdge-1.0.1-alpine3.16_${{ matrix.arch }}_dynamic.tar.gz
+          echo "WASMEDGE_DIR=$PWD/WasmEdge-1.0.1-Linux" >> ${GITHUB_ENV}
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          # list of Docker images to use as base name for tags
-          images: vincent2nd/runwasi-wasmedge
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            preview
-            # type=raw,value=bin.${{ github.sha }}
-          bake-target: meta-helper
+      - name: Build
+        timeout-minutes: 10
+        run: |
+          make build-wasmedge FEATURES_wasmedge=--no-default-features
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+  # lib:
+  #   runs-on: ubuntu-latest
+  #   needs: [set-plugin-matrix]
+  #   strategy:
+  #     matrix:
+  #       plugin: ${{ fromJSON(needs.set-plugin-matrix.outputs.plugins) }}
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
 
-      - name: Build and push
-        uses: docker/bake-action@v4
-        env:
-          platforms: 'linux/amd64'
-        with:
-          files: |
-            release/docker-bake.hcl
-            ${{ steps.meta.outputs.bake-file }}
-          targets: bin
-          # set: |
-          #   *.cache-from=type=gha
-          #   *.cache-to=type=gha,mode=max
-          push: ${{ github.event_name != 'pull_request' }}
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v2
 
-  allinone:
-    runs-on: ubuntu-latest
-    needs: [set-plugin-matrix]
-    strategy:
-      matrix:
-        plugin: ${{ fromJSON(needs.set-plugin-matrix.outputs.plugins) }}
+  #     - name: Docker meta
+  #       id: meta
+  #       uses: docker/metadata-action@v4
+  #       with:
+  #         # list of Docker images to use as base name for tags
+  #         images: vincent2nd/runwasi-wasmedge-plugin
+  #         # generate Docker tags based on the following events/attributes
+  #         tags: |
+  #           type=raw,value=lib.${{ matrix.plugin }}-preview
+  #           # type=raw,value=lib.${{ matrix.plugin }}.${{ github.sha }}
+  #         bake-target: meta-helper
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v2
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+  #     - name: Login to Docker Hub
+  #       uses: docker/login-action@v2
+  #       with:
+  #         username: ${{ secrets.DOCKER_HUB_USER }}
+  #         password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          # list of Docker images to use as base name for tags
-          images: vincent2nd/runwasi-wasmedge-plugin
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            type=raw,value=allinone.${{ matrix.plugin }}-preview
-            # type=raw,value=allinone.${{ matrix.plugin }}.${{ github.sha }}
-          bake-target: meta-helper
+  #     - name: Build and push
+  #       uses: docker/bake-action@v4
+  #       env:
+  #         plugin: ${{ matrix.plugin }}
+  #         platforms: ${{ matrix.plugin == 'wasi_nn-pytorch' || matrix.plugin == 'wasi_nn-ggml' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+  #       with:
+  #         files: |
+  #           release/docker-bake.hcl
+  #           ${{ steps.meta.outputs.bake-file }}
+  #         targets: lib
+  #         # set: |
+  #         #   *.cache-from=type=gha
+  #         #   *.cache-to=type=gha,mode=max
+  #         push: ${{ github.event_name != 'pull_request' }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+  # bin:
+  #   runs-on: ubuntu-latest
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
 
-      - name: Build and push
-        uses: docker/bake-action@v4
-        env:
-          plugin: ${{ matrix.plugin }}
-          platforms: ${{ matrix.plugin == 'wasi_nn-pytorch' || matrix.plugin == 'wasi_nn-ggml' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-        with:
-          files: |
-            release/docker-bake.hcl
-            ${{ steps.meta.outputs.bake-file }}
-          targets: allinone
-          # set: |
-          #   *.cache-from=type=gha
-          #   *.cache-to=type=gha,mode=max
-          push: ${{ github.event_name != 'pull_request' }}
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v2
+
+  #     - name: Docker meta
+  #       id: meta
+  #       uses: docker/metadata-action@v4
+  #       with:
+  #         # list of Docker images to use as base name for tags
+  #         images: vincent2nd/runwasi-wasmedge
+  #         # generate Docker tags based on the following events/attributes
+  #         tags: |
+  #           preview
+  #           # type=raw,value=bin.${{ github.sha }}
+  #         bake-target: meta-helper
+
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v2
+
+  #     - name: Login to Docker Hub
+  #       uses: docker/login-action@v2
+  #       with:
+  #         username: ${{ secrets.DOCKER_HUB_USER }}
+  #         password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+  #     - name: Build and push
+  #       uses: docker/bake-action@v4
+  #       env:
+  #         platforms: 'linux/amd64'
+  #       with:
+  #         files: |
+  #           release/docker-bake.hcl
+  #           ${{ steps.meta.outputs.bake-file }}
+  #         targets: bin
+  #         # set: |
+  #         #   *.cache-from=type=gha
+  #         #   *.cache-to=type=gha,mode=max
+  #         push: ${{ github.event_name != 'pull_request' }}
+
+  # allinone:
+  #   runs-on: ubuntu-latest
+  #   needs: [set-plugin-matrix]
+  #   strategy:
+  #     matrix:
+  #       plugin: ${{ fromJSON(needs.set-plugin-matrix.outputs.plugins) }}
+
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v2
+
+  #     - name: Docker meta
+  #       id: meta
+  #       uses: docker/metadata-action@v4
+  #       with:
+  #         # list of Docker images to use as base name for tags
+  #         images: vincent2nd/runwasi-wasmedge-plugin
+  #         # generate Docker tags based on the following events/attributes
+  #         tags: |
+  #           type=raw,value=allinone.${{ matrix.plugin }}-preview
+  #           # type=raw,value=allinone.${{ matrix.plugin }}.${{ github.sha }}
+  #         bake-target: meta-helper
+
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v2
+
+  #     - name: Login to Docker Hub
+  #       uses: docker/login-action@v2
+  #       with:
+  #         username: ${{ secrets.DOCKER_HUB_USER }}
+  #         password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+  #     - name: Build and push
+  #       uses: docker/bake-action@v4
+  #       env:
+  #         plugin: ${{ matrix.plugin }}
+  #         platforms: ${{ matrix.plugin == 'wasi_nn-pytorch' || matrix.plugin == 'wasi_nn-ggml' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+  #       with:
+  #         files: |
+  #           release/docker-bake.hcl
+  #           ${{ steps.meta.outputs.bake-file }}
+  #         targets: allinone
+  #         # set: |
+  #         #   *.cache-from=type=gha
+  #         #   *.cache-to=type=gha,mode=max
+  #         push: ${{ github.event_name != 'pull_request' }}
