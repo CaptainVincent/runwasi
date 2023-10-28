@@ -4722,8 +4722,7 @@ dependencies = [
 [[package]]
 name = "wasmedge-macro"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbe80d95a88e9ac87b6aaf7bc9acd1fdfcd92045db2bf41a2262f623e2406a92"
+source = "git+https://github.com/WasmEdge/wasmedge-rust-sdk.git#3146e89f6808fc44471daa009d7a8dfce04bd69d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4776,8 +4775,7 @@ dependencies = [
 [[package]]
 name = "wasmedge-types"
 version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d4e7c8aebe2c513bb389beebc148253eb6f5904a6f9327179bbf2014c0efd52"
+source = "git+https://github.com/WasmEdge/wasmedge-rust-sdk.git#3146e89f6808fc44471daa009d7a8dfce04bd69d"
 dependencies = [
  "thiserror",
  "wat",
