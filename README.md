@@ -1,63 +1,16 @@
-![runwasi logo light mode](./art/logo/runwasi_icon1.svg#gh-light-mode-only)
-![runwasi logo dark mode](./art/logo/runwasi_icon3.svg#gh-dark-mode-only)
+# Runwasi with WasmEdge Advancements
 
-# runwasi
+> ### Announcement  
+> This repository is not the official version of [Runwasi](https://github.com/containerd/runwasi).  Its purpose is solely to showcase the functionalities of Runwasi with [WasmEdge](https://github.com/WasmEdge/WasmEdge) through demonstrations and provide users with quick access to installation package releases. If you are new to Runwasi, I would recommend reading the official [README](https://github.com/containerd/runwasi/blob/main/README.md) first. The following operations and explanations assume that you have a certain level of familiarity to proceed.
 
-> Warning: Alpha quality software, do not use in production.
+## LLAMA2 Example
 
-This is a project to facilitate running wasm workloads managed by containerd either directly (ie. through ctr) or as directed by Kubelet via the CRI plugin.
-It is intended to be a (rust) library that you can take and integrate with your wasm host.
-Included in the repository is a PoC for running a plain wasi host (ie. no extra host functions except to support wasi system calls).
+[![asciicast](https://asciinema.org/a/619799.svg)](https://asciinema.org/a/619799)
 
-## Community
-
-- If you haven't joined the CNCF slack yet, you can do so [here](https://slack.cncf.io/).
-- Come join us on our [slack channel #runwasi](https://cloud-native.slack.com/archives/C04LTPB6Z0V)
-on the CNCF slack.
-- Public Community Call on Tuesdays every other week at 9:00 AM PT: [Zoom](https://zoom.us/my/containerd?pwd=bENmREpnSGRNRXdBZWV5UG8wbU1oUT09), [Meeting Notes](https://docs.google.com/document/d/1aOJ-O7fgMyRowHD0kOoA2Z_4d19NyAvvdqOkZO3Su_M/edit?usp=sharing)
-
-## Usage
-
-runwasi is intended to be consumed as a library to be linked to from your own wasm host implementation.
-
-There are two modes of operation supported:
-
-1. "Normal" mode where there is 1 shim process per container or k8s pod.
-2. "Shared" mode where there is a single manager service running all shims in process.
-
-In either case you need to implement a trait to teach runwasi how to use your wasm host.
-
-There are two ways to do this:
-* implementing the `sandbox::Instance` trait
-* or implementing the `container::Engine` trait
-
-The most flexible but complex is the `sandbox::Instance` trait:
-
-```rust
-pub trait Instance {
-    /// The WASI engine type
-    type Engine: Send + Sync + Clone;
-
-    /// Create a new instance
-    fn new(id: String, cfg: Option<&InstanceConfig<Self::E>>) -> Self;
-    /// Start the instance
-    /// The returned value should be a unique ID (such as a PID) for the instance.
-    /// Nothing internally should be using this ID, but it is returned to containerd where a user may want to use it.
-    fn start(&self) -> Result<u32, Error>;
-    /// Send a signal to the instance
-    fn kill(&self, signal: u32) -> Result<(), Error>;
-    /// Delete any reference to the instance
-    /// This is called after the instance has exited.
-    fn delete(&self) -> Result<(), Error>;
-    /// Wait for the instance to exit
-    /// The waiter is used to send the exit code and time back to the caller
-    /// Ideally this would just be a blocking call with a normal result, however
-    /// because of how this is called from a thread it causes issues with lifetimes of the trait implementer.
-    fn wait(&self, waiter: &Wait) -> Result<(), Error>;
-}
-```
+(This video is run with Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz)
 
 The `container::Engine` trait provides a simplified API:
+### Download model
 
 ```rust
 pub trait Engine: Clone + Send + Sync + 'static {
@@ -72,193 +25,111 @@ pub trait Engine: Clone + Send + Sync + 'static {
     /// * a parsable `wat` file.
     fn can_handle(&self, ctx: &impl RuntimeContext) -> Result<()> { /* default implementation*/ }
 }
+```bash
+curl -LO https://huggingface.co/TheBloke/Llama-2-7B-GGUF/resolve/main/llama-2-7b.Q5_K_M.gguf
 ```
 
-After implementing `container::Engine` you can use `container::Instance<impl container::Engine>`, which implements the `sandbox::Instance` trait.
+### Install wasmedge shim with ggml plugin
 
-To use your implementation in "normal" mode, you'll need to create a binary which has a main that looks something like this:
-
-```rust
-use containerd_shim as shim;
-use containerd_shim_wasm::sandbox::{ShimCli, Instance}
-
-struct MyInstance {
-    // ...
-}
-
-impl Instance for MyInstance {
-    // ...
-}
-
-fn main() {
-    shim::run::<ShimCli<MyInstance>>("io.containerd.myshim.v1", opts);
-}
+```bash
+sudo ctr content fetch ghcr.io/second-state/runwasi-wasmedge-plugin:allinone.wasi_nn-ggml
+sudo ctr install ghcr.io/second-state/runwasi-wasmedge-plugin:allinone.wasi_nn-ggml -l -r
 ```
 
-or when using the `container::Engine` trait, like this:
+### Login github with your PAT first
 
-```rust
-use containerd_shim as shim;
-use containerd_shim_wasm::{sandbox::ShimCli, container::{Instance, Engine}}
-
-struct MyEngine {
-    // ...
-}
-
-impl Engine for MyEngine {
-    // ...
-}
-
-fn main() {
-    shim::run::<ShimCli<Instance<Engine>>>("io.containerd.myshim.v1", opts);
-}
+```bash
+docker login ghcr.io -u <UserName>
 ```
 
-Note you can implement your own ShimCli if you like and customize your wasm engine and other things.
-I encourage you to checkout how that is implemented.
+### Run llama2 with docker + wasm
 
-The shim binary just needs to be installed into `$PATH` (as seen by the containerd process) with a binary name like `containerd-shim-myshim-v1`.
-
-For the shared mode:
-
-```rust
-use containerd_shim_wasm::sandbox::{Local, ManagerService, Instance};
-use containerd_shim_wasm::services::sandbox_ttrpc::{create_manager, Manager};
-use std::sync::Arc;
-use ttrpc::{self, Server};
-/// ...
-
-struct MyInstance {
-    /// ...
-}
-
-impl Instance for MyInstance {
-    // ...
-}
-
-fn main() {
-    let s: ManagerService<Local<MyInstance>> =
-        ManagerService::new(Engine::new(Config::new().interruptable(true)).unwrap());
-    let s = Arc::new(Box::new(s) as Box<dyn Manager + Send + Sync>);
-    let service = create_manager(s);
-
-    let mut server = Server::new()
-        .bind("unix:///run/io.containerd.myshim.v1/manager.sock")
-        .unwrap()
-        .register_service(service);
-
-    server.start().unwrap();
-    let (_tx, rx) = std::sync::mpsc::channel::<()>();
-    rx.recv().unwrap();
-}
+```bash
+docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm \
+  -v /opt/containerd/lib:/opt/containerd/lib \
+  -v $PWD:/resource \
+  --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
+  --env WASMEDGE_WASINN_PRELOAD=default:GGML:CPU:/resource/llama-2-7b.Q5_K_M.gguf \
+  ghcr.io/second-state/runwasi-demo:llama-simple \
+  --model-alias default --ctx-size 4096 --n-predict 128 --stream-stdout \
+  --prompt 'Robert Oppenheimer most important achievement is '
 ```
 
-This will be the host daemon that you startup and manage on your own.
-You can use the provided `containerd-shim-myshim-v1` binary as the shim to specify in containerd.
+### Output
 
-Shared mode requires precise control over real threads and as such should not be used with an async runtime.
-
-Check out these projects that build on top of runwasi:
-- [spinkube/containerd-shim-spin](https://github.com/spinkube/containerd-shim-spin)
-- [deislabs/containerd-wasm-shims](https://github.com/deislabs/containerd-wasm-shims)
-
-
-### Components
-
-- **containerd-shim-[ wasmedge | wasmtime | wasmer ]-v1**
-
-This is a containerd shim which runs wasm workloads in [WasmEdge](https://github.com/WasmEdge/WasmEdge) or [Wasmtime](https://github.com/bytecodealliance/wasmtime) or [Wasmer](https://github.com/wasmerio/wasmer).
-You can use it with containerd's `ctr` by specifying `--runtime=io.containerd.[ wasmedge | wasmtime | wasmer ].v1` when creating the container.
-And make sure the shim binary must be in $PATH (that is the $PATH that containerd sees). Usually you just run `make install` after `make build`.
-> build shim with wasmedge we need install library first
-
-This shim runs one per pod.
-
-- **containerd-shim-[ wasmedge | wasmtime | wasmer ]d-v1**
-
-A cli used to connect containerd to the `containerd-[ wasmedge | wasmtime | wasmer ]d` sandbox daemon.
-When containerd requests for a container to be created, it fires up this shim binary which will connect to the `containerd-[ wasmedge | wasmtime | wasmer ]d` service running on the host.
-The service will return a path to a unix socket which this shim binary will write back to containerd which containerd will use to connect to for shim requests.
-This binary does not serve requests, it is only responsible for sending requests to the `containerd-[ wasmedge | wasmtime | wasmer ]d` daemon to create or destroy sandboxes.
-
-- **containerd-[ wasmedge | wasmtime | wasmer ]d**
-
-This is a sandbox manager that enables running 1 wasm host for the entire node instead of one per pod (or container).
-When a container is created, a request is sent to this service to create a sandbox.
-The "sandbox" is a containerd task service that runs in a new thread on its own unix socket, which we return back to containerd to connect to.
-
-The Wasmedge / Wasmtime / Wasmer engine is shared between all sandboxes in the service.
-
-To use this shim, specify `io.containerd.[ wasmedge | wasmtime | wasmer ]d.v1` as the runtime to use.
-You will need to make sure the `containerd-[ wasmedge | wasmtime | wasmer ]d` daemon has already been started.
-
-## Contributing
-
-To begin contributing, learn to build and test the project or to add a new shim please read our [CONTRIBUTING.md](./CONTRIBUTING.md)
-
-## Demo
-
-### Installing the shims for use with Containerd
-
-Make sure you have [installed dependencies](./CONTRIBUTING.md#setting-up-your-local-environment) and install the shims:
-
-```terminal
-make build
-sudo make install
+```bash
+[INFO] prompt context size: 4096
+[INFO] Number of tokens to predict: 128
+[INFO] Number of layers to run on the GPU: 100
+[INFO] Batch size for prompt processing: 4096
+[INFO] Log enable: false
+[INFO] Stream stdout: true
+1945, when he was the director of the Manhattan Project, which was the development of the atomic bomb. surely, this is the most important achievement of his life.
+Robert Oppenheimer was born in New York City on April 22, 1904. He was the son of Julius Oppenheimer, a wealthy textile merchant, and Ella Friedman Oppenheimer. He was the youngest of three children. His father was Jewish and his mother was Protestant.
+Oppenheimer was a brilliant student and
 ```
 
-> Note: `make build` will only build one binary. The `make install` command copies the binary to $PATH and uses symlinks to create all the component described above. 
+## Introduce
+The current installation process for the latest release is based on **[containerd managing opt](https://github.com/containerd/containerd/blob/main/docs/managed-opt.md)**. We maintain installable images in several `ghcr.io` repositories. Here, we'll briefly explain how to access them.
 
-Build the test image and load it into containerd:
+### [runwasi-wasmedge](https://github.com/second-state/runwasi/pkgs/container/runwasi-wasmedge/versions?filters%5Bversion_type%5D=tagged)
 
-```
-make test-image
-make load
-```
+Maintain an image with only the shim and essential libraries.
 
-### Demo 1 using container image that contains a Wasm module.
+### [runwasi-wasmedge-plugin](https://github.com/second-state/runwasi/pkgs/container/runwasi-wasmedge-plugin/versions?filters%5Bversion_type%5D=tagged)
 
-Run it with `sudo ctr run --rm --runtime=io.containerd.[ wasmedge | wasmtime | wasmer ].v1 ghcr.io/containerd/runwasi/wasi-demo-app:latest testwasm /wasi-demo-app.wasm echo 'hello'`. You should see some output repeated like:
-
-```terminal
-sudo ctr run --rm --runtime=io.containerd.wasmtime.v1 ghcr.io/containerd/runwasi/wasi-demo-app:latest testwasm
-
-This is a song that never ends.
-Yes, it goes on and on my friends.
-Some people started singing it not knowing what it was,
-So they'll continue singing it forever just because...
-
-This is a song that never ends.
-Yes, it goes on and on my friends.
-Some people started singing it not knowing what it was,
-So they'll continue singing it forever just because...
-
-(...)
-```
-
-To kill the process, you can run in other session: `sudo ctr task kill -s SIGKILL testwasm`. 
-
-The test binary supports commands for different type of functionality, check [crates/wasi-demo-app/src/main.rs](crates/wasi-demo-app/src/main.rs) to try it out.
-
-### Demo 2 using OCI Images with custom WASM layers
-
-The previous demos run with an OCI Container image containing the wasm module in the file system.  Another option is to provide a cross-platform OCI Image that that will not have the wasm module or components in the file system of the container that wraps the wasmtime/wasmedge process.  This OCI Image with custom WASM layers can be run across any platform and provides for de-duplication in the Containerd content store among other benefits. To build OCI images using your own images you can use the [oci-tar-builder](./crates/oci-tar-builder/README.md)
-
-To learn more about this approach checkout the [design document](https://docs.google.com/document/d/11shgC3l6gplBjWF1VJCWvN_9do51otscAm0hBDGSSAc/edit).  
-
-> **Note**: This requires containerd 1.7.7+ and 1.6.25+.  If you do not have these patches for both `containerd` and `ctr` you will end up with an error message such as `mismatched image rootfs and manifest layers` at the import and run steps. Latest versions of k3s and kind have the necessary containerd versions.
-
-Build and import the OCI image with WASM layers image:
+This is the new plugin functionality we currently support. The installation process for plugins is similar to the one mentioned earlier (shim only), which will be explained in more detail below. The difference lies in the use of tags to differentiate functionality. In general, the naming convention is as follows: 
 
 ```
-make test-image/oci
-make load/oci
+<package>.<plugin>
 ```
 
-Run the image with `sudo ctr run --rm --runtime=io.containerd.[ wasmedge | wasmtime | wasmer ].v1 ghcr.io/containerd/runwasi/wasi-demo-oci:latest testwasmoci`
+- \<package\>
+  - lib : Library only, including plugin and its dependencies.
+  - allinone : In addition to the library, it also includes the Wasmedge Shim binary.
+- \<plugin\> : suppoted plugin
+  - wasi_nn-pytorch
+  - wasi_nn-ggml
+  - wasm_bpf (TBV)
+  - wasmedge_image (TBV)
+  - wasmedge_tensorflow (TBV)
+  - wasmedge_tensorflowlite (TBV)
+  - wasi_crypto (TBV)
+  - wasi_nn-tensorflowlite (TBV)
+  - wasi_nn-openvino (TBV)
 
+
+> ### Attention  
+> 1. **TBV** means to be verified. It has been pre-packaged, but complete integration tests have not been added yet, so there may be issues during execution.
+> 2. This feature is still in progress, and the naming conventions may change at later.
+
+## Instructions
+
+- To install the above packages, you can simply execute the following commands.
+
+```bash
+sudo ctr content fetch <docker_img>:<tag>
+sudo ctr install <docker_img>:<tag> -l -r
 ```
-sudo ctr run --rm --runtime=io.containerd.wasmtime.v1 ghcr.io/containerd/runwasi/wasi-demo-oci:latest testwasmoci wasi-demo-oci.wasm echo 'hello'
-hello
-exiting 
+
+- To remove it, you will need to manually delete the files under the specified path (if they exist).
+
+```bash
+rm /opt/containerd/lib/*
+rm /opt/containerd/bin/*
 ```
+
+> ### Attention  
+> Installation from the `ctr` command will overwrite the default runtime (shim) search path. So, if you want to run the shim build from source, you should first execute the previous command to remove them and then restart `containerd` using the command below.
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart containerd
+```
+
+## More Examples
+
+We have prepared three daily run demo actions, including [ctr](https://github.com/second-state/runwasi/blob/feature-plugin/.github/workflows/full-testing.yml), [docker](https://github.com/second-state/runwasi/blob/feature-plugin/.github/workflows/docker-demo.yml), and [llama2](https://github.com/second-state/runwasi/blob/feature-plugin/.github/workflows/llama2.yml) (preview). You can check their usage and daily action [status](https://github.com/second-state/runwasi/actions).
+
+## Prebuilt demo image
+
+[Here](https://github.com/second-state/runwasi/pkgs/container/runwasi-demo/versions?filters%5Bversion_type%5D=tagged), we have prebuilt demo images available. You can obtain these same images by simply running `make load_demo` and `make load` (official test case) in the root folder. They are generated based on the test cases in this [directory](https://github.com/second-state/runwasi/tree/main/demo).
