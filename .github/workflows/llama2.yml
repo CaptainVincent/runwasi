@@ -45,12 +45,12 @@ jobs:
         run: curl -LO https://huggingface.co/TheBloke/Llama-2-7B-GGUF/resolve/main/llama-2-7b.Q5_K_M.gguf
 
       - name: Fetch WASI-NN GGML with LLAMA2 example image
-        run: sudo ctr image pull ghcr.io/second-state/runwasi-demo:llama-simple
+        run: sudo ctr image pull ghcr.io/captainvincent/runwasi-demo:llama-simple
 
       - name: Install WASI-NN GGML plugin (preview)
         run: |
-          sudo ctr content fetch ghcr.io/second-state/runwasi-wasmedge-plugin:allinone.wasi_nn-ggml
-          sudo ctr install ghcr.io/second-state/runwasi-wasmedge-plugin:allinone.wasi_nn-ggml -l -r
+          sudo ctr content fetch ghcr.io/captainvincent/runwasi-wasmedge-plugin:allinone.wasi_nn-ggml
+          sudo ctr install ghcr.io/captainvincent/runwasi-wasmedge-plugin:allinone.wasi_nn-ggml -l -r
 
       - name: Run WASI-NN GGML with LLAMA2 example (preview) through containerd
         run: |
@@ -59,7 +59,7 @@ jobs:
             --mount type=bind,src=$PWD,dst=/resource,options=bind:ro \
             --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
             --env WASMEDGE_WASINN_PRELOAD=default:GGML:CPU:/resource/llama-2-7b.Q5_K_M.gguf \
-            ghcr.io/second-state/runwasi-demo:llama-simple testggml /app.wasm \
+            ghcr.io/captainvincent/runwasi-demo:llama-simple testggml /app.wasm \
             --model-alias default --ctx-size 4096 --n-predict 128 --log-enable --stream-stdout \
             --prompt 'Robert Oppenheimer most important achievement is '
 
@@ -70,6 +70,6 @@ jobs:
             -v $PWD:/resource \
             --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
             --env WASMEDGE_WASINN_PRELOAD=default:GGML:CPU:/resource/llama-2-7b.Q5_K_M.gguf \
-            ghcr.io/second-state/runwasi-demo:llama-simple \
+            ghcr.io/captainvincent/runwasi-demo:llama-simple \
             --model-alias default --ctx-size 4096 --n-predict 128 --log-enable --stream-stdout \
             --prompt 'Robert Oppenheimer most important achievement is '

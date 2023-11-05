@@ -83,7 +83,7 @@ fn main() {
 
     builder.add_config(
         img,
-        format!("ghcr.io/second-state/runwasi-demo:{}", pkg_name).to_string(),
+        format!("ghcr.io/captainvincent/runwasi-demo:{}", pkg_name).to_string(),
     );
 
     let f = File::create(&p).unwrap();

@@ -58,7 +58,7 @@ fn main() {
 
     builder.add_config(
         img,
-        "ghcr.io/second-state/runwasi-demo:wasi-demo-app".to_string(),
+        "ghcr.io/captainvincent/runwasi-demo:wasi-demo-app".to_string(),
     );
 
     let f = File::create(&p).unwrap();
