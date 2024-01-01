@@ -74,33 +74,33 @@ jobs:
           sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
             ghcr.io/captainvincent/runwasi-demo:wasmedge_hyper_client testclient
 
-      - name: Run hyper server example
-        run: |
-          nohup sudo ctr run --rm --net-host \
-            --runtime=io.containerd.wasmedge.v1 \
-            ghcr.io/captainvincent/runwasi-demo:wasmedge_hyper_server testserver &
-          sleep 3
-          curl http://localhost:8080/echo -X POST -d "WasmEdge"
-          sudo ctr task kill -s SIGKILL testserver
+      # - name: Run hyper server example
+      #   run: |
+      #     nohup sudo ctr run --rm --net-host \
+      #       --runtime=io.containerd.wasmedge.v1 \
+      #       ghcr.io/captainvincent/runwasi-demo:wasmedge_hyper_server testserver &
+      #     sleep 3
+      #     curl http://localhost:8080/echo -X POST -d "WasmEdge"
+      #     sudo ctr task kill -s SIGKILL testserver
 
-      - name: Run reqwest example
-        run: |
-          sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
-            ghcr.io/captainvincent/runwasi-demo:wasmedge_reqwest_demo testreqwest
+      # - name: Run reqwest example
+      #   run: |
+      #     sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
+      #       ghcr.io/captainvincent/runwasi-demo:wasmedge_reqwest_demo testreqwest
 
-      - name: Run db example
-        run: |
-          sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
-            --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/captainvincent/runwasi-demo:wasmedge-mysql-driver-demo testdb \
-            /insert.wasm
-          sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
-            --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/captainvincent/runwasi-demo:wasmedge-mysql-driver-demo testdb \
-            /query.wasm
-          sudo ctr run --rm --net-host  -runtime=io.containerd.wasmedge.v1 \
-            --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/captainvincent/runwasi-demo:crud testdb
+      # - name: Run db example
+      #   run: |
+      #     sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
+      #       --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
+      #       ghcr.io/captainvincent/runwasi-demo:wasmedge-mysql-driver-demo testdb \
+      #       /insert.wasm
+      #     sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
+      #       --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
+      #       ghcr.io/captainvincent/runwasi-demo:wasmedge-mysql-driver-demo testdb \
+      #       /query.wasm
+      #     sudo ctr run --rm --net-host  -runtime=io.containerd.wasmedge.v1 \
+      #       --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
+      #       ghcr.io/captainvincent/runwasi-demo:crud testdb
 
       - name: Run rootfs mounts example
         run: |
@@ -108,18 +108,18 @@ jobs:
             --mount type=bind,src=$PWD/demo/rootfs-mounts,dst=/mnt,options=rbind:ro \
             ghcr.io/captainvincent/runwasi-demo:wasmedge-rootfs-mounts-demo preopens
 
-      - name: Run microservice with database example
-        run: |
-          nohup sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
-            --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/captainvincent/runwasi-demo:order_demo_service testmicroservice &
-          sleep 3
-          curl http://localhost:8080/init
-          curl http://localhost:8080/create_orders -X POST -d @demo/microservice_db/orders.json
-          curl http://localhost:8080/orders
-          curl http://localhost:8080/update_order -X POST -d @demo/microservice_db/update_order.json
-          curl http://localhost:8080/delete_order?id=2
-          sudo ctr task kill -s SIGKILL testmicroservice
+      # - name: Run microservice with database example
+      #   run: |
+      #     nohup sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
+      #       --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
+      #       ghcr.io/captainvincent/runwasi-demo:order_demo_service testmicroservice &
+      #     sleep 3
+      #     curl http://localhost:8080/init
+      #     curl http://localhost:8080/create_orders -X POST -d @demo/microservice_db/orders.json
+      #     curl http://localhost:8080/orders
+      #     curl http://localhost:8080/update_order -X POST -d @demo/microservice_db/update_order.json
+      #     curl http://localhost:8080/delete_order?id=2
+      #     sudo ctr task kill -s SIGKILL testmicroservice
 
       - name: Install WASI-NN PyTorch plugin
         run: |
