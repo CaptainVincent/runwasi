@@ -20,7 +20,7 @@ jobs:
     with:
       os: ${{ matrix.os }}
       runtime: ${{ matrix.runtime }}
-  
+
   test-image:
     name: ${{ matrix.runtime }}
     strategy:

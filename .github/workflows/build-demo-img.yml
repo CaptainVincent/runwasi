@@ -12,7 +12,7 @@ on:
         default: 'info'
   push:
     branches:
-      - "main"
+      - "rebase-self-test"
     paths:
       - "demo/**"
       - ".github/workflows/build-demo-img.yml"
