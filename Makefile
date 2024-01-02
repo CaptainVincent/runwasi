@@ -14,8 +14,9 @@ DB_MYSQL_ASYNC_PATH = demo/db/mysql_async
 MICROSERVICE_DB_PATH = demo/microservice_db
 WASINN_PATH = demo/wasinn/pytorch-mobilenet-image/rust
 PREOPENS_PATH = demo/rootfs-mounts
-LLAMA2_PATH = demo/llama2/simple
+LLAMA2_SIMPLE_PATH = demo/llama2/simple
 LLAMA2_CHAT_PATH = demo/llama2/chat
+LLAMA2_API_SERVER_PATH = demo/llama2/api-server/llama-api-server
 
 # We have a bit of fancy logic here to determine the target
 # since we support building for gnu and musl
@@ -218,8 +219,9 @@ define build_img
 		cargo add --build tar@0.4 sha256@=1.4.0 log@0.4 env_logger@0.10 oci-spec@0.6.4 anyhow@1.0; \
 		cargo add --build oci-tar-builder --git https://github.com/containerd/runwasi; \
 	fi
-	cd $1 && cargo build --target=wasm32-wasi $(RELEASE_FLAG)
-	cd $1 && BUILD_IMAGE=TRUE cargo build --target=wasm32-wasi $(RELEASE_FLAG)
+	echo $1/target
+	cd $1 && cargo build --target=wasm32-wasi $(RELEASE_FLAG) --target-dir ./target
+	cd $1 && BUILD_IMAGE=TRUE cargo build --target=wasm32-wasi $(RELEASE_FLAG) --target-dir ./target
 endef
 
 .PHONY: demo/%
@@ -234,8 +236,9 @@ load_demo: $(HYPER_CLIENT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
 	$(MICROSERVICE_DB_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
 	$(WASINN_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
 	$(PREOPENS_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(LLAMA2_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(LLAMA2_CHAT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
+	$(LLAMA2_SIMPLE_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+	$(LLAMA2_CHAT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+	$(LLAMA2_API_SERVER_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
 	$(foreach var,$^,\
 		sudo ctr -n $(CONTAINERD_NAMESPACE) image import --all-platforms $(var);\
 	)
