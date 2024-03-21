@@ -3,6 +3,10 @@ use containerd_shim_wasm::container::{Engine, Entrypoint, Instance, RuntimeConte
 use wasmedge_sdk::config::{ConfigBuilder, HostRegistrationConfigOptions};
 use wasmedge_sdk::plugin::PluginManager;
 use wasmedge_sdk::VmBuilder;
+#[cfg(feature = "wasi_nn")]
+use wasmedge_sdk::plugin::NNPreload;
+#[cfg(feature = "wasi_nn")]
+use std::str::FromStr;
 
 pub type WasmEdgeInstance = Instance<WasmEdgeEngine>;
 
@@ -51,6 +55,17 @@ impl Engine for WasmEdgeEngine {
         let mod_name = name.unwrap_or_else(|| "main".to_string());
 
         PluginManager::load(None)?;
+        // preload must before register wasinn plugin
+        #[cfg(feature = "wasi_nn")]
+        for env in envs {
+            let parts: Vec<&str> = env.split('=').collect();
+            if parts.len() == 2 {
+                let key = parts[0];
+                if key == "WASMEDGE_WASINN_PRELOAD" {
+                    NNPreload::from_str(parts[1])?;
+                }
+            }
+        }
         let vm = vm.auto_detect_plugins()?;
 
         let wasm_bytes = source.as_bytes()?;
