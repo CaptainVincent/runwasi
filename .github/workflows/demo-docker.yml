@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - "main"
+      - "rebase-upstream"
   schedule:
     - cron: "0 0 */1 * *"
 
@@ -70,7 +71,7 @@ jobs:
           FEATURES_wasmedge="--no-default-features --features wasi_nn" LN="sudo ln -sf" INSTALL="sudo install" make install-wasmedge
 
       - name: Run basic test case
-        run: docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasip1/wasm ghcr.io/second-state/runwasi-demo:wasi-demo-app echo 'hello'
+        run: docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasip1/wasm ghcr.io/captainvincent/runwasi-demo:wasi-demo-app echo 'hello'
 
       # - name: Run hyper client example
       #   run: docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasip1/wasm ghcr.io/second-state/runwasi-demo:wasmedge_hyper_client
@@ -78,7 +79,7 @@ jobs:
       - name: Run hyper server example
         run: |
           docker run --name server -p 8080:8080 -d --rm --runtime=io.containerd.wasmedge.v1 \
-            --platform wasip1/wasm ghcr.io/second-state/runwasi-demo:wasmedge_hyper_server
+            --platform wasip1/wasm ghcr.io/captainvincent/runwasi-demo:wasmedge_hyper_server
           sleep 3
           curl http://localhost:8080/echo -X POST -d "WasmEdge"
           docker stop server
@@ -90,7 +91,7 @@ jobs:
         run: |
           docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasip1/wasm \
             -v $PWD/demo/rootfs-mounts:/mnt \
-            ghcr.io/second-state/runwasi-demo:wasmedge-rootfs-mounts-demo
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-rootfs-mounts-demo
 
       - name: Inject WASI-NN PyTorch plugin and dependencies
         run: |
@@ -105,5 +106,5 @@ jobs:
             -v /opt/containerd/lib:/opt/containerd/lib \
             -v $PWD/demo/wasinn/pytorch-mobilenet-image:/resource \
             --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
-            ghcr.io/second-state/runwasi-demo:wasmedge-wasinn-example-mobilenet-image \
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-wasinn-example-mobilenet-image \
             resource/mobilenet.pt /resource/input.jpg

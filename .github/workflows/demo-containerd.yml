@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - "main"
+      - "rebase-upstream"
   schedule:
     - cron: "0 0 */1 * *"
 
@@ -66,7 +67,7 @@ jobs:
       - name: Run basic test case
         run: |
           sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
-            ghcr.io/second-state/runwasi-demo:wasi-demo-app testwasm \
+            ghcr.io/captainvincent/runwasi-demo:wasi-demo-app testwasm \
             /wasi-demo-app.wasm echo 'hello'
 
       # - name: Run hype client example
@@ -78,7 +79,7 @@ jobs:
         run: |
           nohup sudo ctr run --rm --net-host \
             --runtime=io.containerd.wasmedge.v1 \
-            ghcr.io/second-state/runwasi-demo:wasmedge_hyper_server testserver &
+            ghcr.io/captainvincent/runwasi-demo:wasmedge_hyper_server testserver &
           sleep 3
           curl http://localhost:8080/echo -X POST -d "WasmEdge"
           sudo ctr task kill -s SIGKILL testserver
@@ -92,27 +93,27 @@ jobs:
         run: |
           sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
             --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/second-state/runwasi-demo:wasmedge-mysql-driver-demo testdb \
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-mysql-driver-demo testdb \
             /insert.wasm
           sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
             --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/second-state/runwasi-demo:wasmedge-mysql-driver-demo testdb \
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-mysql-driver-demo testdb \
             /query.wasm
           sudo ctr run --rm --net-host  -runtime=io.containerd.wasmedge.v1 \
             --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/second-state/runwasi-demo:crud testdb
+            ghcr.io/captainvincent/runwasi-demo:crud testdb
 
       - name: Run rootfs mounts example
         run: |
           sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
             --mount type=bind,src=$PWD/demo/rootfs-mounts,dst=/mnt,options=rbind:ro \
-            ghcr.io/second-state/runwasi-demo:wasmedge-rootfs-mounts-demo preopens
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-rootfs-mounts-demo preopens
 
       - name: Run microservice with database example
         run: |
           nohup sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
             --env DATABASE_URL=mysql://root:root@127.0.0.1:3306/mysql \
-            ghcr.io/second-state/runwasi-demo:order_demo_service testmicroservice &
+            ghcr.io/captainvincent/runwasi-demo:order_demo_service testmicroservice &
           sleep 3
           curl http://localhost:8080/init
           curl http://localhost:8080/create_orders -X POST -d @demo/microservice_db/orders.json
@@ -134,5 +135,5 @@ jobs:
             --mount type=bind,src=/opt/containerd/lib,dst=/opt/containerd/lib,options=bind:ro \
             --mount type=bind,src=$PWD/demo/wasinn/pytorch-mobilenet-image,dst=/resource,options=rbind:ro \
             --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
-            ghcr.io/second-state/runwasi-demo:wasmedge-wasinn-example-mobilenet-image \
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-wasinn-example-mobilenet-image \
             testwasinn /app.wasm /resource/mobilenet.pt /resource/input.jpg
