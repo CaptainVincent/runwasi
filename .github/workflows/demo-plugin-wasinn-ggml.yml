@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - "main"
+      - "rebase-upstream"
   schedule:
     - cron: "0 0 */1 * *"
 
