@@ -1,0 +1,91 @@
+name: llama
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+  push:
+    branches:
+      - "main"
+  schedule:
+    - cron: "0 0 */1 * *"
+
+jobs:
+  preview-feature:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Manually update GitHub's containerd
+        run: |
+          wget https://github.com/containerd/containerd/releases/download/v1.7.5/containerd-1.7.5-linux-amd64.tar.gz
+          sudo tar Czxvf /usr containerd-1.7.5-linux-amd64.tar.gz
+          sudo systemctl restart containerd
+
+      - name: Set up Docker
+        uses: crazy-max/ghaction-setup-docker@v2
+        with:
+          daemon-config: |
+            {
+              "debug": true,
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
+      - name: Install apt-get packages
+        run: |
+          sudo ACCEPT_EULA=Y apt-get update
+          sudo ACCEPT_EULA=Y apt-get upgrade
+          sudo apt-get install wget git curl software-properties-common build-essential libdbus-1-dev \
+            pkg-config libseccomp-dev protobuf-compiler libprotobuf-dev
+
+      - name: Install WasmEdge lib
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --version=0.13.5 --plugins wasi_nn-ggml
+          sudo -E sh -c 'echo "$HOME/.wasmedge/lib" > /etc/ld.so.conf.d/libwasmedge.conf'
+          sudo ldconfig
+
+      - name: Build and install WasmEdge shim
+        run: |
+          FEATURES_wasmedge="--no-default-features --features wasi_nn" LN="sudo ln -sf" INSTALL="sudo install" make install-wasmedge
+
+      - name: Inject WASI-NN GGML plugin and dependencies
+        run: |
+          ./demo/utils/inject_plugin.sh $HOME/.wasmedge/plugin/libwasmedgePluginWasiNN.so /opt/containerd/lib
+
+      - name: Fetch Llama-2-7B-GGUF model
+        run: curl -LO https://huggingface.co/TheBloke/Llama-2-7B-GGUF/resolve/main/llama-2-7b.Q5_K_M.gguf
+
+      - name: Fetch WASI-NN GGML with LLAMA2 example image
+        run: sudo ctr image pull ghcr.io/captainvincent/runwasi-demo:wasmedge-ggml-llama
+
+      - name: Run WASI-NN GGML with LLAMA2 example (preview) through containerd
+        run: |
+          sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
+            --mount type=bind,src=/opt/containerd/lib,dst=/opt/containerd/lib,options=bind:ro \
+            --mount type=bind,src=$PWD,dst=/resource,options=bind:ro \
+            --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
+            --env WASMEDGE_WASINN_PRELOAD=default:GGML:CPU:/resource/llama-2-7b.Q5_K_M.gguf \
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-ggml-llama testggml /app.wasm \
+            default \
+            $'[INST] <<SYS>>\nYou are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature. If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you do not know the answer to a question, please do not share false information.\n<</SYS>>\nWhat is the capital of Japan?[/INST]'
+
+      - name: Run WASI-NN GGML with LLAMA2 example (preview) through docker
+        run: |
+          docker run --rm --runtime=io.containerd.wasmedge.v1 --platform wasi/wasm \
+            -v /opt/containerd/lib:/opt/containerd/lib \
+            -v $PWD:/resource \
+            --env WASMEDGE_PLUGIN_PATH=/opt/containerd/lib \
+            --env WASMEDGE_WASINN_PRELOAD=default:GGML:CPU:/resource/llama-2-7b.Q5_K_M.gguf \
+            ghcr.io/captainvincent/runwasi-demo:wasmedge-ggml-llama \
+            default \
+            $'[INST] <<SYS>>\nYou are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature. If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you do not know the answer to a question, please do not share false information.\n<</SYS>>\nWhat is the capital of Japan?[/INST]'
