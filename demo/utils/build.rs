@@ -84,6 +84,7 @@ fn main() {
     builder.add_config(
         img,
         format!("ghcr.io/second-state/runwasi-demo:{}", pkg_name).to_string(),
+        spec::MediaType::ImageConfig
     );
 
     let f = File::create(&p).unwrap();

@@ -15,8 +15,8 @@ DB_MYSQL_ASYNC_PATH = demo/db/mysql_async
 MICROSERVICE_DB_PATH = demo/microservice_db
 WASINN_PATH = demo/wasinn/pytorch-mobilenet-image/rust
 PREOPENS_PATH = demo/rootfs-mounts
-LLAMA2_PATH = demo/llama2/simple
-LLAMA2_CHAT_PATH = demo/llama2/chat
+LLAMAEDGE_SIMPLE_PATH = demo/llamaedge/simple
+LLAMAEDGE_CHAT_PATH = demo/llamaedge/chat
 
 # We have a bit of fancy logic here to determine the target
 # since we support building for gnu and musl
@@ -224,7 +224,7 @@ define build_img
 		echo "Setup build environment for" $1; \
 		cd $1; \
 		cp $(BUILD_SCRIPT_PATH) .; \
-		cargo add --build tar@0.4 sha256@=1.4.0 log@0.4 env_logger@0.10 oci-spec@0.6.4 anyhow@1.0; \
+		cargo add --build tar@0.4 sha256@=1.5.0 log@0.4 env_logger@0.10 oci-spec@0.6.4 anyhow@1.0; \
 		cargo add --build oci-tar-builder --git https://github.com/containerd/runwasi; \
 	fi
 	cd $1 && cargo build --target=wasm32-wasi $(RELEASE_FLAG)
@@ -243,8 +243,8 @@ load_demo: $(HYPER_CLIENT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
 	$(MICROSERVICE_DB_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
 	$(WASINN_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
 	$(PREOPENS_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(LLAMA2_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(LLAMA2_CHAT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
+	$(LLAMAEDGE_SIMPLE_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+	$(LLAMAEDGE_CHAT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
 	$(foreach var,$^,\
 		sudo ctr -n $(CONTAINERD_NAMESPACE) image import --all-platforms $(var);\
 	)
@@ -273,7 +273,7 @@ test/k8s/cluster-%: dist/img.tar bin/kind test/k8s/_out/img-%
 
 
 .PHONY: test/k8s/deploy-workload-%
-test/k8s/deploy-workload-%: test/k8s/clean test/k8s/cluster-% 
+test/k8s/deploy-workload-%: test/k8s/clean test/k8s/cluster-%
 	kubectl --context=kind-$(KIND_CLUSTER_NAME) apply -f test/k8s/deploy.yaml
 	kubectl --context=kind-$(KIND_CLUSTER_NAME) wait deployment wasi-demo --for condition=Available=True --timeout=90s
 	# verify that we are still running after some time
@@ -342,7 +342,7 @@ test/k3s-oci-%: dist/img-oci.tar bin/k3s dist-%
 	sudo bin/k3s kubectl apply -f test/k8s/deploy.oci.yaml
 	sudo bin/k3s kubectl get pods --all-namespaces
 	sudo bin/k3s kubectl wait deployment wasi-demo --for condition=Available=True --timeout=120s
-	# verify that we are still running after some time	
+	# verify that we are still running after some time
 	sleep 5s
 	sudo bin/k3s kubectl wait deployment wasi-demo --for condition=Available=True --timeout=5s
 	sudo bin/k3s kubectl get pods -o wide
