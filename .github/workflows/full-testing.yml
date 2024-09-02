@@ -35,11 +35,11 @@ jobs:
           sudo apt-get install wget git curl software-properties-common build-essential libdbus-1-dev \
             pkg-config libseccomp-dev protobuf-compiler libprotobuf-dev
 
-      # - name: Manually update GitHub's containerd
-      #   run: |
-      #     wget https://github.com/containerd/containerd/releases/download/v1.7.5/containerd-1.7.5-linux-amd64.tar.gz
-      #     sudo tar Czxvf /usr containerd-1.7.5-linux-amd64.tar.gz
-      #     sudo systemctl restart containerd
+      - name: Manually update GitHub's containerd
+        run: |
+          wget https://github.com/containerd/containerd/releases/download/v1.7.5/containerd-1.7.5-linux-amd64.tar.gz
+          sudo tar Czxvf /usr containerd-1.7.5-linux-amd64.tar.gz
+          sudo systemctl restart containerd
 
       # - name: Install and run MySQL
       #   run: |
@@ -60,21 +60,21 @@ jobs:
           LN="sudo ln -sf" INSTALL="sudo install" make install-wasmedge
           # make install-wasmedge FEATURES_wasmedge=--no-default-features
 
-      # - name: Build all test and demo OCI images
-      #   run: |
-      #     make load
-      #     make load_demo
+      - name: Build all test and demo OCI images
+        run: |
+          make load
+          make load_demo
 
-      # - name: Run basic test case
-      #   run: |
-      #     sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
-      #       ghcr.io/second-state/runwasi/wasi-demo-app:latest testwasm \
-      #       /wasi-demo-app.wasm echo 'hello'
+      - name: Run basic test case
+        run: |
+          sudo ctr run --rm --runtime=io.containerd.wasmedge.v1 \
+            ghcr.io/second-state/runwasi/wasi-demo-app:latest testwasm \
+            /wasi-demo-app.wasm echo 'hello'
 
-      # - name: Run hype client example
-      #   run: |
-      #     sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
-      #       ghcr.io/second-state/runwasi-demo:wasmedge_hyper_client testclient
+      - name: Run hype client example
+        run: |
+          sudo ctr run --rm --net-host --runtime=io.containerd.wasmedge.v1 \
+            ghcr.io/second-state/runwasi-demo:wasmedge_hyper_client testclient
 
       # - name: Run hyper server example
       #   run: |

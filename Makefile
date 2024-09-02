@@ -217,7 +217,7 @@ load/oci: dist/img-oci.tar
 .PHONY:
 target/wasm32-wasi/$(OPT_PROFILE)/img-oci.tar: target/wasm32-wasi/$(OPT_PROFILE)/wasi-demo-app.wasm
 	mkdir -p ${CURDIR}/bin/$(OPT_PROFILE)/
-	cargo run --bin oci-tar-builder -- --name wasi-demo-app --repo ghcr.io/second-state/runwasi-demo --tag wasi-demo-app --module ./target/wasm32-wasi/$(OPT_PROFILE)/wasi-demo-app.wasm -o target/wasm32-wasi/$(OPT_PROFILE)/img-oci.tar
+	cargo run --bin oci-tar-builder -- --name wasi-demo-app --repo ghcr.io/CaptainVincent/runwasi-demo --tag wasi-demo-app --module ./target/wasm32-wasi/$(OPT_PROFILE)/wasi-demo-app.wasm -o target/wasm32-wasi/$(OPT_PROFILE)/img-oci.tar
 
 define build_img
 	@if ! test -f $1/build.rs; then \
@@ -235,16 +235,21 @@ endef
 demo/%:
 	$(call build_img, $(patsubst %/target/wasm32-wasi/$(OPT_PROFILE)/img.tar,demo/%,$*))
 
-load_demo: $(HYPER_CLIENT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(HYPER_SERVER_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(REQWEST_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(DB_MYSQL_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(DB_MYSQL_ASYNC_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(MICROSERVICE_DB_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(WASINN_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(PREOPENS_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(LLAMAEDGE_SIMPLE_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
-	$(LLAMAEDGE_CHAT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
+# load_demo: $(HYPER_CLIENT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(HYPER_SERVER_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(REQWEST_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(DB_MYSQL_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(DB_MYSQL_ASYNC_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(MICROSERVICE_DB_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(WASINN_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(PREOPENS_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(LLAMAEDGE_SIMPLE_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar \
+# 	$(LLAMAEDGE_CHAT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
+# 	$(foreach var,$^,\
+# 		sudo ctr -n $(CONTAINERD_NAMESPACE) image import --all-platforms $(var);\
+# 	)
+
+load_demo: $(HYPER_CLIENT_PATH)/target/wasm32-wasi/$(OPT_PROFILE)/img.tar
 	$(foreach var,$^,\
 		sudo ctr -n $(CONTAINERD_NAMESPACE) image import --all-platforms $(var);\
 	)
