@@ -57,6 +57,7 @@ jobs:
       - name: Build and install WasmEdge shim
         run: |
           make build-wasmedge
+          LN="sudo ln -sf" INSTALL="sudo install" make install-wasmedge
           # make install-wasmedge FEATURES_wasmedge=--no-default-features
 
       # - name: Build all test and demo OCI images
