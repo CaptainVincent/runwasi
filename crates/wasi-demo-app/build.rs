@@ -58,7 +58,7 @@ fn main() {
 
     builder.add_config(
         img,
-        "ghcr.io/second-state/runwasi/wasi-demo-app:latest".to_string(),
+        "ghcr.io/CaptainVincent/runwasi/wasi-demo-app:latest".to_string(),
         spec::MediaType::ImageConfig,
     );
 
