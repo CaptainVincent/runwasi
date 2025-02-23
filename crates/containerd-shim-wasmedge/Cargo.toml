@@ -17,7 +17,7 @@ libc = { workspace = true }
 serial_test = { workspace = true }
 
 [features]
-default = ["standalone", "static"]
+default = ["standalone", "static", "wasi_nn"]
 standalone = ["wasmedge-sdk/standalone"]
 static = ["wasmedge-sdk/static"]
 wasi_nn = ["wasmedge-sdk/wasi_nn"]
